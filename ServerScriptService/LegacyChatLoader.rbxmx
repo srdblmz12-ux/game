@@ -1,0 +1,3619 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+	<Meta name="ExplicitAutoJoints">true</Meta>
+	<External>null</External>
+	<External>nil</External>
+	<Item class="Script" referent="RBXA9FF94B2D55D40E18444CFAD96D702A9">
+		<Properties>
+			<ProtectedString name="Source"><![CDATA[local Chat = game:GetService("Chat")
+local StarterPlayer = game:GetService("StarterPlayer")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+script.ChatScript.Parent = StarterPlayer.StarterPlayerScripts
+script.ChatServiceRunner.Parent = ServerScriptService
+script.Remotes.Parent = Chat
+script.Shared.Parent = Chat]]></ProtectedString>
+			<bool name="Disabled">false</bool>
+			<Content name="LinkedSource"><null></null></Content>
+			<token name="RunContext">0</token>
+			<string name="ScriptGuid">{8E53D131-35A8-47AD-90C1-F5ED426F57DC}</string>
+			<BinaryString name="AttributesSerialize"></BinaryString>
+			<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+			<bool name="DefinesCapabilities">false</bool>
+			<string name="Name">LegacyChatLoader</string>
+			<int64 name="SourceAssetId">-1</int64>
+			<BinaryString name="Tags"></BinaryString>
+		</Properties>
+		<Item class="Script" referent="RBX4663BE63991F489FB5D5BE3F09ECD47D">
+			<Properties>
+				<ProtectedString name="Source"><![CDATA[-- // Initializes all server-sided chat scripts.
+
+local Chat = game:GetService("Chat")
+local TextChatService = game:GetService("TextChatService")
+
+if TextChatService.ChatVersion == Enum.ChatVersion.LegacyChatService then
+	error("ChatVersion must be set to TextChatService for Basic Legacy Chat Rewrite to work!")
+end
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+
+local ServerMessageLogs = require(script.ServerMessageLogs)
+local ServerChatCommandsInterface = require(script.ServerChatCommandsInterface)
+local WhisperChannels = require(script.WhisperChannels)
+local TypingIndicator = require(script.TypingIndicator)
+local SpeakerProperties = require(script.SpeakerProperties)
+local BlankMessageChecker = require(script.BlankMessageChecker)
+
+ServerMessageLogs.init()
+ServerChatCommandsInterface.init()
+WhisperChannels.init()
+SpeakerProperties.init()
+BlankMessageChecker.init()
+TypingIndicator.init()
+
+TextChatService.ChatWindowConfiguration.Enabled = false
+TextChatService.ChatInputBarConfiguration.Enabled = false
+TextChatService.ChannelTabsConfiguration.Enabled = false
+TextChatService.BubbleChatConfiguration.Enabled = false
+
+for _,v in script.ChatModules:GetChildren() do
+	task.spawn(function()
+		require(v)()
+	end)
+end]]></ProtectedString>
+				<bool name="Disabled">false</bool>
+				<Content name="LinkedSource"><null></null></Content>
+				<token name="RunContext">0</token>
+				<string name="ScriptGuid">{8EBC2B6E-1208-4190-9C0C-E6DF9D166168}</string>
+				<BinaryString name="AttributesSerialize"></BinaryString>
+				<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+				<bool name="DefinesCapabilities">false</bool>
+				<string name="Name">ChatServiceRunner</string>
+				<int64 name="SourceAssetId">-1</int64>
+				<BinaryString name="Tags"></BinaryString>
+			</Properties>
+			<Item class="ModuleScript" referent="RBX4CAFF0470C6149CEA7C50220759DAFE4">
+				<Properties>
+					<Content name="LinkedSource"><null></null></Content>
+					<ProtectedString name="Source"><![CDATA[-- // The global message log for every message sent by any player.
+
+local Players = game:GetService("Players")
+local Chat = game:GetService("Chat")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatUtil = require(Shared:WaitForChild("ChatUtil"))
+
+local ChatServiceRunner = script.Parent
+local ServerChatConstants = require(ChatServiceRunner.ServerChatConstants)
+
+local TextChatService = game:GetService("TextChatService")
+
+local TextChannels = TextChatService:WaitForChild("TextChannels")
+
+local ServerMessageLogs = {}
+
+local globalChatLogs: {{speaker: Player, message: string}} = {}
+
+local function logMessage(speaker: Player, message: string)
+	if #globalChatLogs == ServerChatConstants.MessageLogsLimit then
+		table.remove(globalChatLogs, 1)
+	end
+	table.insert(globalChatLogs, {
+		speaker = speaker,
+		message = message,
+	})
+	
+	ChatUtil.debugPrint(`Message logged: [{speaker.Name}]: {message}`)
+end
+
+function ServerMessageLogs.getGlobalChatLog(): {TextChatMessage}
+	return globalChatLogs
+end
+
+function ServerMessageLogs.init()
+	local function onPlayerAdded(player: Player)
+		player.Chatted:Connect(function(message)
+			logMessage(player, message)
+		end)
+	end
+	
+	Players.PlayerAdded:Connect(onPlayerAdded)
+	for _,player in Players:GetPlayers() do
+		onPlayerAdded(player)
+	end
+end
+
+return ServerMessageLogs]]></ProtectedString>
+					<string name="ScriptGuid">{3C7CB62F-F075-4AA8-A9AA-1B8F9FE4DCCE}</string>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">ServerMessageLogs</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+			</Item>
+			<Item class="ModuleScript" referent="RBX8624DC356F034BE49AA78A77261F29A8">
+				<Properties>
+					<Content name="LinkedSource"><null></null></Content>
+					<ProtectedString name="Source"><![CDATA[-- // Server-sided constants.
+
+local ServerChatConstants = {
+	GlobalMessageLogLimit = 1000,
+}
+
+table.freeze(ServerChatConstants)
+
+return ServerChatConstants]]></ProtectedString>
+					<string name="ScriptGuid">{2C8FAC7D-2924-4649-B164-8DC61804CAF9}</string>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">ServerChatConstants</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+			</Item>
+			<Item class="ModuleScript" referent="RBX972B5D2E7FB3438FA6B15FD569B12120">
+				<Properties>
+					<Content name="LinkedSource"><null></null></Content>
+					<ProtectedString name="Source"><![CDATA[-- // Listens directly to ShouldDeliverCallback, then calls all callbacks registered to this module.
+
+local TextChatService = game:GetService("TextChatService")
+local Chat = game:GetService("Chat")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatUtil = require(Shared:WaitForChild("ChatUtil"))
+
+local TextChannels = TextChatService:WaitForChild("TextChannels")
+
+local ShouldDeliverCallbackRegistration = {}
+
+type shouldDeliverCallbackType = (textChatMessage: TextChatMessage, targetTextSource: TextSource) -> any
+
+local registeredTextChannels: {[TextChannel]: boolean} = {}
+local registeredCallbacksByTextChannel: {[TextChannel]: {shouldDeliverCallbackType}} = {}
+
+local function registerTextChannel(textChannel: TextChannel)
+	textChannel.ShouldDeliverCallback = function(textChatMessage: TextChatMessage, targetTextSource: TextSource)
+		ChatUtil.debugPrint(`ShouldDeliverCallback is being called for {targetTextSource.Name}: [{textChatMessage.TextSource.Name}]: {textChatMessage.Text}`)
+		local registeredCallbacks = registeredCallbacksByTextChannel[textChannel]
+		
+		-- This message can only be sent to this player if every single callback agrees it should be.
+		local allCallbacksApprove = true
+		for _,callback in registeredCallbacks do
+			local approved = callback(textChatMessage, targetTextSource)
+			if not approved then
+				allCallbacksApprove = false
+			end
+		end
+		
+		if allCallbacksApprove then
+			ChatUtil.debugPrint("Allowing message")
+			return true
+		else
+			ChatUtil.debugPrint("Rejecting message")
+			return false
+		end
+	end
+end
+
+function ShouldDeliverCallbackRegistration.registerCallback(textChannel: TextChannel, callback: shouldDeliverCallbackType)
+	if registeredCallbacksByTextChannel[textChannel] == nil then
+		registeredCallbacksByTextChannel[textChannel] = {}
+		if registeredTextChannels[textChannel] == nil then
+			registerTextChannel(textChannel)
+		end
+	end
+	table.insert(registeredCallbacksByTextChannel[textChannel], callback)
+end
+
+return ShouldDeliverCallbackRegistration]]></ProtectedString>
+					<string name="ScriptGuid">{0708CEDE-05ED-4F54-92B4-62D1B1DE7E3A}</string>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">ShouldDeliverCallbackRegistration</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+			</Item>
+			<Item class="ModuleScript" referent="RBXACFD7A1E4CEA4974983A899FB8D7E331">
+				<Properties>
+					<Content name="LinkedSource"><null></null></Content>
+					<ProtectedString name="Source"><![CDATA[-- // The interface for the server side of chat commands.
+
+local Chat = game:GetService("Chat")
+local Players = game:GetService("Players")
+local TextChatService = game:GetService("TextChatService")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatUtil = require(Shared:WaitForChild("ChatUtil"))
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+
+local Remotes = Chat:WaitForChild("Remotes")
+local DisplaySystemMessage = Remotes:WaitForChild("DisplaySystemMessage")
+local RunChatCommand = Remotes:WaitForChild("RunChatCommand")
+
+local ShouldDeliverCallbackRegistration = require(script.Parent.ShouldDeliverCallbackRegistration)
+
+local TextChannels = TextChatService:WaitForChild("TextChannels")
+
+local ServerChatCommandsInterface = {}
+
+type serverChatCommand = {
+	onFired: ((player: Player, args: {string}?, metadataAfterCommandName: string?) -> {text: string, textColor: Color3?}?)?,
+	metadataTriggeredShouldDeliverCallback: ((textChatMessage: TextChatMessage, targetTextSource: TextSource, metadataAfterCommandName: string) -> boolean)?,
+}
+
+local commandModules: {[string]: serverChatCommand} = {}
+
+function ServerChatCommandsInterface.runCommand(player: Player, commandName: string, args: {string}?)
+	ChatUtil.debugPrint(`Running command {commandName} for {player.Name} with arguments: {args and table.unpack(args)}`)
+	
+	local module = commandModules[commandName]
+	
+	assert(module ~= nil and module.onFired ~= nil, `Could not find server command "{commandName}"`)
+
+	local returnMessageData = module.onFired(player, args)
+	if returnMessageData ~= nil then
+		DisplaySystemMessage:FireClient(player, returnMessageData)
+	end
+end
+
+function ServerChatCommandsInterface.init()
+	RunChatCommand.OnServerEvent:Connect(function(player, commandName: string, args: {}?, metadata: string?)
+		local _commandName, metadataAfterCommandName: string? = nil, nil
+		if metadata ~= nil then
+			_commandName, metadataAfterCommandName = ChatUtil.getCommandInfoFromMetadata(metadata)
+		end
+		ServerChatCommandsInterface.runCommand(player, commandName, args, metadataAfterCommandName)
+	end)
+	
+	for _,moduleInstance in script:GetChildren() do
+		if moduleInstance.Name == "template" or table.find(ChatConstants.BlacklistedCommands, moduleInstance.Name) then
+			continue
+		end
+		commandModules[moduleInstance.Name] = require(moduleInstance)
+	end
+	
+	for _,textChannel: TextChannel in TextChannels:GetChildren() do
+		ShouldDeliverCallbackRegistration.registerCallback(textChannel, function(textChatMessage, targetTextSource)
+			local metadata = textChatMessage.Metadata
+			if metadata ~= nil then
+				local commandName, metadataAfterCommandName = ChatUtil.getCommandInfoFromMetadata(metadata)
+				
+				if commandName ~= nil then
+					local module = commandModules[commandName]
+					if module == nil then
+						-- No module; we do not care
+						return true
+					end
+					if module.metadataTriggeredShouldDeliverCallback ~= nil then
+						ChatUtil.debugPrint(`Running metadataTriggeredShouldDeliverCallback`)
+						return module.metadataTriggeredShouldDeliverCallback(textChatMessage, targetTextSource, metadataAfterCommandName)
+					end
+				end
+			end
+
+			-- No command metadata, or could not find an associated function
+			return true
+		end)
+	end
+end
+
+return ServerChatCommandsInterface]]></ProtectedString>
+					<string name="ScriptGuid">{2B12B8F5-DAC9-4AD2-AE27-197935C4D413}</string>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">ServerChatCommandsInterface</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+				<Item class="ModuleScript" referent="RBXC57CF806FD1746D9B9B3F0D847C585F8">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- // The basic template for commands on the server. Meant to be used as a reference; should not actually be run.
+
+local template = {}
+
+--[[
+IMPORTANT REMINDER:
+The only sanity check done before this was making sure the player
+had permission to send a message to the channel.
+
+Any other required permissions still need to be checked here.
+]]
+
+function template.onFired(player: Player, args: {string}?, metadataAfterCommandName: string?): {
+	text: string,
+	textColor: Color3?,
+	}?
+	-- Triggered when a remote event is fired with this command specified.
+	-- This function can be deleted if you don't need this behavior.
+	
+	-- Optional return value displays a system message to the player.
+	return {
+		text = `Successfully ran command! Arguments: {table.concat(args, ", ")} | Metadata: {metadataAfterCommandName}`,
+		textColor = Color3.new(0, 1, 0),
+	}
+end
+
+function template.metadataTriggeredShouldDeliverCallback(textChatMessage: TextChatMessage, targetTextSource: TextSource, metadataAfterCommandName: string): boolean
+	-- Triggered on ShouldDeliverCallback when a message contains metadata such as "commandname:data".
+	-- This function can be deleted if you don't need this behavior.
+	
+	return true -- Return value decides if the message should be sent to this player. See ShouldDeliverCallbackRegistration for more information.
+end
+
+return template]]></ProtectedString>
+						<string name="ScriptGuid">{BE12DD47-2437-4B21-B427-2C1C140EBEDE}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<string name="Name">template</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+					</Properties>
+				</Item>
+			</Item>
+			<Item class="ModuleScript" referent="RBXE5F1CA5595854D74B678FA72DCBC839A">
+				<Properties>
+					<Content name="LinkedSource"><null></null></Content>
+					<ProtectedString name="Source"><![CDATA[-- // Handles creation of whisper (private message) channels.
+
+local TextChatService = game:GetService("TextChatService")
+local Players = game:GetService("Players")
+local Chat = game:GetService("Chat")
+
+local TextChannels = TextChatService:WaitForChild("TextChannels")
+local Remotes = Chat:WaitForChild("Remotes")
+
+local WhisperInterface = {}
+
+local function canWhisper(speaker: Player, recipient: Player): boolean
+	return TextChatService:CanUsersChatAsync(speaker.UserId, recipient.UserId) and TextChatService:CanUsersDirectChatAsync(speaker.UserId, {recipient.UserId})
+end
+
+function WhisperInterface.getAllWhisperChannelsWithPlayer(player: Player): {TextChannel}
+	local channelsFound: {TextChannel} = {}
+	
+	for _,textChannel: TextChannel in TextChannels:GetChildren() do
+		if string.sub(textChannel.Name, 1, 7) == "Whisper" then
+			local split = string.split(textChannel.Name, "/")
+			local playerName1 = split[2]
+			local playerName2 = split[3]
+			
+			if playerName1 == player.Name or playerName2 == player.Name then
+				table.insert(channelsFound, textChannel)
+			end
+		end
+	end
+	
+	return channelsFound
+end
+
+function WhisperInterface.getWhisperChannel(playerA: Player, playerB: Player): TextChannel?
+	local textChannel = TextChannels:FindFirstChild(`Whisper/{playerA.Name}/{playerB.Name}`)
+	if textChannel == nil then
+		TextChannels:FindFirstChild(`Whisper/{playerB.Name}/{playerA.Name}`)
+	end
+	if textChannel == nil then
+		return nil
+	end
+end
+
+function WhisperInterface.init()
+	Remotes.GetWhisperChannel.OnServerInvoke = function(requester: Player, targetPlayer: Player)
+		local whisperChannel = WhisperInterface.getWhisperChannel(requester, targetPlayer)
+		
+		-- Check if these two players are able to communicate
+		if not canWhisper(requester, targetPlayer) then
+			-- They can't; destroy whisper channel if it exists, then return nothing
+			if whisperChannel ~= nil then
+				whisperChannel:Destroy()
+			end
+			return nil
+		end
+		
+		if whisperChannel ~= nil then
+			return whisperChannel
+		else
+			-- Whisper channel does not exist; create one
+			local newWhisperChannel = Instance.new("TextChannel")
+			newWhisperChannel.Name = `Whisper/{requester.Name}/{targetPlayer.Name}`
+			newWhisperChannel.Parent = TextChannels
+			newWhisperChannel:AddUserAsync(requester.UserId)
+			newWhisperChannel:AddUserAsync(targetPlayer.UserId)
+			
+			return newWhisperChannel
+		end
+	end
+	
+	Players.PlayerRemoving:Connect(function(player)
+		for _,textChannel in WhisperInterface.getAllWhisperChannelsWithPlayer(player) do
+			textChannel:Destroy()
+		end
+	end)
+end
+
+return WhisperInterface]]></ProtectedString>
+					<string name="ScriptGuid">{8B8743C8-84CF-4501-99C7-7002D71612D2}</string>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">WhisperChannels</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+			</Item>
+			<Item class="ModuleScript" referent="RBX94A0DB0539234B1F944114A64AF85D22">
+				<Properties>
+					<Content name="LinkedSource"><null></null></Content>
+					<ProtectedString name="Source"><![CDATA[-- // Manages speaker properties, such as chat color and chat tags.
+
+local Chat = game:GetService("Chat")
+local Players = game:GetService("Players")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatUtil = require(Shared:WaitForChild("ChatUtil"))
+
+local SpeakerProperties = {}
+
+local function getSpeakerPropertiesFolder(player: Player)
+	return player.SpeakerProperties
+end
+
+local function getTagFolder(player)
+	local propertiesFolder = getSpeakerPropertiesFolder(player)
+	local tagsFolder = propertiesFolder:FindFirstChild("Tags")
+	if tagsFolder ~= nil then
+		return tagsFolder
+	else
+		-- Make folder
+		tagsFolder = Instance.new("Folder")
+		tagsFolder.Name = "Tags"
+		tagsFolder.Parent = propertiesFolder
+		return tagsFolder
+	end
+end
+
+function SpeakerProperties.addTag(player: Player, tagName: string, tagColor: Color3?, priority: number?)
+	local tagFolder = getTagFolder(player)
+	local tag: Color3Value = tagFolder:FindFirstChild(tagName)
+	if tag ~= nil then
+		-- Player already has a tag with the same name
+		return
+	end
+	
+	ChatUtil.debugPrint(`Adding tag {tagName} to {player.Name}`)
+	
+	tag = Instance.new("Color3Value")
+	tag.Name = tagName
+	if tagColor ~= nil then
+		tag.Value = tagColor
+	else
+		tag:SetAttribute("NoColor", true)
+	end
+	if priority ~= nil then
+		tag:SetAttribute("Priority", priority)
+	end
+	
+	tag.Parent = tagFolder
+end
+
+function SpeakerProperties.removeTag(player: Player, tagName: string)
+	local tagFolder = getTagFolder(player)
+	local tag: Color3Value = tagFolder:FindFirstChild(tagName)
+	if tag ~= nil then
+		ChatUtil.debugPrint(`Removing tag {tagName} from {player.Name}`)
+		tag:Destroy()
+	end
+end
+
+function SpeakerProperties.setChatColor(player: Player, chatColor: Color3?)
+	local propertiesFolder = getSpeakerPropertiesFolder(player)
+	local chatColorObject: Color3Value? = propertiesFolder:FindFirstChild("ChatColor")
+	if chatColor ~= nil then
+		if chatColorObject == nil then
+			-- Create chat color object
+			chatColorObject = Instance.new("Color3Value")
+			chatColorObject.Name = "ChatColor"
+			chatColorObject.Parent = propertiesFolder
+		end
+		chatColorObject.Value = chatColor
+	else
+		-- Reset to default
+		if chatColorObject ~= nil then
+			chatColorObject:Destroy()
+		end
+	end
+end
+
+function SpeakerProperties.init()
+	local function onPlayerAdded(player: Player)
+		local speakerPropertiesFolder = Instance.new("Folder")
+		speakerPropertiesFolder.Name = "SpeakerProperties"
+		speakerPropertiesFolder.Parent = player
+	end
+	
+	Players.PlayerAdded:Connect(onPlayerAdded)
+	for _,player in Players:GetPlayers() do
+		onPlayerAdded(player)
+	end
+end
+
+return SpeakerProperties]]></ProtectedString>
+					<string name="ScriptGuid">{9E16EDEF-E1B5-49E6-973E-5F45D048F1AD}</string>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">SpeakerProperties</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+			</Item>
+			<Item class="ModuleScript" referent="RBXAAA30056D5294B75BFD974E765DC4F9B">
+				<Properties>
+					<Content name="LinkedSource"><null></null></Content>
+					<ProtectedString name="Source"><![CDATA[-- // Handles indicators for when players are typing in chat.
+
+local Chat = game:GetService("Chat")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+
+local Remotes = Chat:WaitForChild("Remotes")
+local TypedInChatBar = Remotes:WaitForChild("TypedInChatBar")
+local StoppedTypingInChatBar = Remotes:WaitForChild("StoppedTypingInChatBar")
+
+local TypingIndicator = {}
+
+local playersTyping: {[Player]: boolean?} = {}
+local playersTypingAnimateThreads: {[Player]: thread?} = {}
+local playersTypingStopThreads: {[Player]: thread?} = {}
+
+local function createGui(): BillboardGui
+	local typingGui = Instance.new("BillboardGui")
+	typingGui.Name = "TypingGui"
+	typingGui.Size = UDim2.fromOffset(100, 100)
+	typingGui.StudsOffset = Vector3.new(1.4, 0.7, 0)
+	typingGui.ExtentsOffset = Vector3.new(0, 0, 1)
+	typingGui.MaxDistance = 45
+
+	local billboardFrame = Instance.new("Frame")
+	billboardFrame.Name = "BillboardFrame"
+	billboardFrame.BackgroundTransparency = 1
+	billboardFrame.Position = UDim2.fromScale(0.5, -0.5)
+	billboardFrame.Size = UDim2.fromScale(1, 1)
+
+	local bubble = Instance.new("ImageLabel")
+	bubble.Name = "Bubble"
+	bubble.AnchorPoint = Vector2.new(0.5, 1)
+	bubble.BackgroundTransparency = 1
+	bubble.BorderSizePixel = 0
+	bubble.Image = "rbxassetid://91960039863799"
+	bubble.Position = UDim2.new(0.5, 0, 1, -14)
+	bubble.Size = UDim2.fromOffset(50, 40)
+	bubble.SliceCenter = Rect.new(5, 5, 15, 15)
+
+	local bubbleText = Instance.new("TextLabel")
+	bubbleText.Name = "BubbleText"
+	bubbleText.AnchorPoint = Vector2.new(0.5, 0)
+	bubbleText.BackgroundTransparency = 1
+	bubbleText.ClipsDescendants = true
+	bubbleText.FontFace = Font.new("rbxasset://fonts/families/SourceSansPro.json")
+	bubbleText.Position = UDim2.fromScale(0.5, 0)
+	bubbleText.Size = UDim2.fromScale(0.8, 1)
+	bubbleText.Text = ""
+	bubbleText.TextSize = 24
+	bubbleText.TextXAlignment = Enum.TextXAlignment.Left
+
+	local uIPadding = Instance.new("UIPadding")
+	uIPadding.Name = "UIPadding"
+	uIPadding.PaddingBottom = UDim.new(0, 12)
+	uIPadding.PaddingLeft = UDim.new(0, 12)
+	uIPadding.PaddingRight = UDim.new(0, 12)
+	uIPadding.PaddingTop = UDim.new(0, 12)
+	uIPadding.Parent = bubbleText
+
+	bubbleText.Parent = bubble
+
+	local tailFrame = Instance.new("Frame")
+	tailFrame.Name = "TailFrame"
+	tailFrame.AnchorPoint = Vector2.new(0.5, 0)
+	tailFrame.BackgroundTransparency = 1
+	tailFrame.Position = UDim2.new(0, -5, 1, -10)
+	tailFrame.Rotation = 70
+	tailFrame.Size = UDim2.fromOffset(10, 20)
+	tailFrame.SizeConstraint = Enum.SizeConstraint.RelativeXX
+
+	local tail = Instance.new("ImageLabel")
+	tail.Name = "Tail"
+	tail.AnchorPoint = Vector2.new(0.5, 0)
+	tail.BackgroundTransparency = 1
+	tail.BorderSizePixel = 0
+	tail.Image = "rbxassetid://114342666659291"
+	tail.Position = UDim2.fromScale(0.5, 0)
+	tail.Size = UDim2.fromScale(1, 1)
+	tail.Parent = tailFrame
+
+	tailFrame.Parent = bubble
+
+	bubble.Parent = billboardFrame
+
+	billboardFrame.Parent = typingGui
+	
+	return typingGui
+end
+
+local function cancelPlayerTyping(player: Player)
+	if playersTypingAnimateThreads[player] ~= nil then
+		task.cancel(playersTypingAnimateThreads[player])
+		playersTypingAnimateThreads[player] = nil
+	end
+	
+	local character = player.Character
+	if character ~= nil then
+		local typingGui = character:FindFirstChild("TypingGui")
+		if typingGui ~= nil then
+			typingGui:Destroy()
+		end
+	end
+	
+	if playersTypingStopThreads[player] ~= nil then
+		task.cancel(playersTypingStopThreads[player])
+		playersTypingStopThreads[player] = nil
+	end
+end
+
+local function onPlayerTyped(player: Player)
+	local character = player.Character
+	local typingGui = character:FindFirstChild("TypingGui")
+	if typingGui == nil then
+		local adornee = character:FindFirstChild("Head")
+		if adornee == nil then
+			adornee = character
+		end
+		
+		typingGui = createGui()
+		typingGui.Parent = character
+		typingGui.Adornee = adornee
+		
+		local bubbleTextLabel: TextLabel = typingGui.BillboardFrame.Bubble.BubbleText
+		
+		playersTypingAnimateThreads[player] = task.spawn(function()
+			while typingGui:IsDescendantOf(workspace) do
+				bubbleTextLabel.Text = "."
+				task.wait(.3)
+				bubbleTextLabel.Text = ".."
+				task.wait(.3)
+				bubbleTextLabel.Text = "..."
+				task.wait(.3)
+			end
+		end)
+	end
+	playersTyping[player] = true
+	
+	if playersTypingStopThreads[player] ~= nil then
+		task.cancel(playersTypingStopThreads[player])
+	end
+	playersTypingStopThreads[player] = task.delay(3, function()
+		playersTypingStopThreads[player] = nil
+		cancelPlayerTyping(player)
+	end)
+end
+
+function TypingIndicator.init()
+	if not ChatConstants.ShowWhenPlayerIsTyping then
+		return
+	end
+	
+	TypedInChatBar.OnServerEvent:Connect(onPlayerTyped)
+	StoppedTypingInChatBar.OnServerEvent:Connect(cancelPlayerTyping)
+end
+
+return TypingIndicator]]></ProtectedString>
+					<string name="ScriptGuid">{40956100-F504-4A62-9A06-52EF36F047BF}</string>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">TypingIndicator</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+			</Item>
+			<Item class="ModuleScript" referent="RBX09A10D28768F4CBABD7A3E803046C459">
+				<Properties>
+					<Content name="LinkedSource"><null></null></Content>
+					<ProtectedString name="Source"><![CDATA[-- // Rejects blank messages if AllowBlankMessages is set to false.
+
+local Chat = game:GetService("Chat")
+local TextChatService = game:GetService("TextChatService")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatUtil = require(Shared:WaitForChild("ChatUtil"))
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+
+local ShouldDeliverCallbackRegistration = require(script.Parent.ShouldDeliverCallbackRegistration)
+
+local TextChannels = TextChatService:WaitForChild("TextChannels")
+
+local BlankMessageChecker = {}
+
+function BlankMessageChecker.init()
+	if ChatConstants.AllowBlankMessages == true then
+		return
+	end
+	
+	for _,textChannel: TextChannel in TextChannels:GetChildren() do
+		ShouldDeliverCallbackRegistration.registerCallback(textChannel, function(textChatMessage, targetTextSource)
+			return not ChatUtil.checkIsBlankString(textChatMessage.Text)
+		end)
+	end
+end
+
+return BlankMessageChecker]]></ProtectedString>
+					<string name="ScriptGuid">{E790053E-AB3C-4A60-9D65-46FF666ECE97}</string>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">BlankMessageChecker</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+			</Item>
+			<Item class="Folder" referent="RBX5EFA3EB88BA74ACB8D3E632B9FF4E57C">
+				<Properties>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">ChatModules</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+			</Item>
+		</Item>
+		<Item class="LocalScript" referent="RBXED5784B8CDE5438AAE6745035C0917C8">
+			<Properties>
+				<ProtectedString name="Source"><![CDATA[-- // Initializes all client-sided chat scripts.
+
+local Chat = game:GetService("Chat")
+local TextChatService = game:GetService("TextChatService")
+local Players = game:GetService("Players")
+
+if not TextChatService:CanUserChatAsync(Players.LocalPlayer.UserId) then
+	-- Player can't use chat at all; don't even bother initializing chat
+	return
+end
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+
+local ChatInterface = require(script.ChatInterface)
+local GuiCreator = require(script.GuiCreator)
+local ChatCommandInterface = require(script.ChatCommandInterface)
+local WhisperInterface = require(script.WhisperInterface)
+local MutedPlayers = require(script.MutedPlayers)
+local BubbleChat = require(script.BubbleChat)
+
+ChatInterface.init()
+ChatCommandInterface.init()
+GuiCreator.create()
+WhisperInterface.init()
+MutedPlayers.init()
+
+if ChatConstants.BubbleChatEnabled then
+	BubbleChat.init()
+end]]></ProtectedString>
+				<bool name="Disabled">false</bool>
+				<Content name="LinkedSource"><null></null></Content>
+				<token name="RunContext">0</token>
+				<string name="ScriptGuid">{E3168208-F711-4636-845F-2A713282D003}</string>
+				<BinaryString name="AttributesSerialize"></BinaryString>
+				<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+				<bool name="DefinesCapabilities">false</bool>
+				<string name="Name">ChatScript</string>
+				<int64 name="SourceAssetId">-1</int64>
+				<BinaryString name="Tags"></BinaryString>
+			</Properties>
+			<Item class="ModuleScript" referent="RBX88440F7EF0C646839ED3D37310668A84">
+				<Properties>
+					<Content name="LinkedSource"><null></null></Content>
+					<ProtectedString name="Source"><![CDATA[-- // Creates the top frame of the chat GUI, assembles all chat GUI objects, and manages functionality dealing with the entire chat GUI window.
+
+local Players = game:GetService("Players")
+local GuiService = game:GetService("GuiService")
+local StarterGui = game:GetService("StarterGui")
+local Chat = game:GetService("Chat")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+
+local localPlayer = Players.LocalPlayer
+
+local ChatScript = script.Parent
+local WindowFocused = require(ChatScript.ChatInterface.WindowFocused)
+local MouseHoveringOverWindow = require(ChatScript.ChatInterface.MouseHoveringOverWindow)
+
+local ChatBar = require(script.ChatBar)
+local ChatChannel = require(script.ChatChannel)
+local ResizeButton = require(script.ResizeButton)
+
+local camera = workspace.CurrentCamera
+local guiInsetMin, guiInsetMax = GuiService:GetGuiInset()
+
+local guiCreator = {}
+
+function guiCreator.create()
+	-- Chat GUI assembly
+	local chatGui = Instance.new("ScreenGui")
+	chatGui.Name = "Chat"
+	chatGui.SafeAreaCompatibility = Enum.SafeAreaCompatibility.FullscreenExtension
+	chatGui.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+	chatGui.ResetOnSpawn = false
+	chatGui.DisplayOrder = 100
+	
+	local chatFrame = Instance.new("Frame")
+	chatFrame.BackgroundTransparency = 1
+	
+	-- I know this if tree is a mess but I don't really know how to fix it -steven
+	local defaultChatWindowSizeScale = ChatConstants.DefaultChatWindowSizeScale
+	if ChatConstants.WindowResizeable then
+		task.spawn(function()
+			-- For some reason ViewportSize is 1, 1 at the very start
+			while camera.ViewportSize.X == 1 do
+				task.wait()
+			end
+			local safeAreaPixels: Vector2 = camera.ViewportSize - guiInsetMin - guiInsetMax
+			local minimumSize = ChatConstants.ChatWindowSizeBoundsPixels.Minimum
+			if not ChatConstants.DefaultChatEnabled then
+				minimumSize = Vector2.new(minimumSize.X, 42)
+				chatFrame.Size = UDim2.fromOffset(
+					math.max(safeAreaPixels.X * defaultChatWindowSizeScale.X, minimumSize.X),
+					minimumSize.Y
+				)
+			else
+				chatFrame.Size = UDim2.fromOffset(
+					math.max(safeAreaPixels.X * defaultChatWindowSizeScale.X, minimumSize.X),
+					math.max(safeAreaPixels.Y * defaultChatWindowSizeScale.Y, minimumSize.Y)
+				)
+			end
+		end)
+		ResizeButton.create().Parent = chatFrame
+	else
+		if ChatConstants.DefaultChatEnabled then
+			chatFrame.Size = UDim2.fromScale(defaultChatWindowSizeScale.X, defaultChatWindowSizeScale.Y)
+		else
+			chatFrame.Size = UDim2.new(defaultChatWindowSizeScale.X, 0, 0, 42)
+		end
+	end
+	
+	local chatChannelParentFrame = ChatChannel.create()
+	if ChatConstants.DefaultChatEnabled then
+		chatChannelParentFrame.Parent = chatFrame
+	end
+	ChatBar.create().Parent = chatFrame
+	
+	chatFrame.Parent = chatGui
+	
+	-- Fading in/out
+	local fadeableElements: {[Frame | TextLabel]: {[string]: any}} = {}
+	
+	local tweenInfo = TweenInfo.new(.4, Enum.EasingStyle.Linear)
+	
+	local fadeInTweens: {Tween} = {}
+	local fadeOutTweens: {Tween} = {}
+	
+	local function registerFadeableElement(v: any, properties: {string})
+		local originalProperties: {[string]: any} = {}
+		
+		local fadeInTweenProperties = {}
+		local fadeOutTweenProperties = {}
+		
+		for _,property in properties do
+			originalProperties[property] = v[property]
+			fadeInTweenProperties[property] = v[property]
+			fadeOutTweenProperties[property] = 1
+		end
+		
+		table.insert(
+			fadeInTweens,
+			TweenService:Create(v, tweenInfo, fadeInTweenProperties)
+		)
+		table.insert(
+			fadeOutTweens,
+			TweenService:Create(v, tweenInfo, fadeOutTweenProperties)
+		)
+		
+		fadeableElements[v] = originalProperties
+	end
+	for _,v in chatFrame:GetDescendants() do
+		if v:IsDescendantOf(chatChannelParentFrame) then
+			continue
+		end
+		if v:IsA("Frame") then
+			if v.BackgroundTransparency < 1 then
+				registerFadeableElement(v, {"BackgroundTransparency"})
+			end
+		elseif v:IsA("TextLabel") or v:IsA("TextBox") or v:IsA("TextButton") then
+			if v.TextTransparency < 1 or v.TextStrokeTransparency < 1 then
+				registerFadeableElement(v, {"TextTransparency", "TextStrokeTransparency", "BackgroundTransparency"})
+			end
+		elseif v:IsA("ImageButton") or v:IsA("ImageLabel") then
+			if v.BackgroundTransparency < 1 or v.ImageTransparency < 1 then
+				registerFadeableElement(v, {"ImageTransparency", "BackgroundTransparency"})
+			end
+		end
+	end
+	
+	local function fadeInWindow()
+		for _,tween in fadeInTweens do
+			tween:Play()
+		end
+	end
+	
+	local function fadeOutWindow()
+		for _,tween in fadeOutTweens do
+			tween:Play()
+		end	
+	end
+	
+	WindowFocused.getBindable().Event:Connect(function(windowFocused)
+		if windowFocused then
+			fadeInWindow()
+		else
+			fadeOutWindow()
+		end
+	end)
+	
+	chatFrame.MouseEnter:Connect(function()
+		MouseHoveringOverWindow.set(true)
+		WindowFocused.update()
+	end)
+	
+	chatFrame.MouseLeave:Connect(function()
+		MouseHoveringOverWindow.set(false)
+		WindowFocused.update()
+	end)
+	
+	task.delay(1, function() -- ChatActive takes a moment to be registered
+		RunService.RenderStepped:Connect(function()
+			chatGui.Enabled = StarterGui:GetCore("ChatActive")
+		end)
+	end)
+	
+	chatGui.Parent = localPlayer.PlayerGui
+end
+
+return guiCreator]]></ProtectedString>
+					<string name="ScriptGuid">{B3747FF3-11B4-4C65-960A-17DB7B018976}</string>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">GuiCreator</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+				<Item class="ModuleScript" referent="RBX6C1D74C95F7C4AE896563380DFAD8196">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- // Creates and manages the chat bar the player types in to send chat messages.
+
+local ContextActionService = game:GetService("ContextActionService")
+local UserInputService = game:GetService("UserInputService")
+local TextService = game:GetService("TextService")
+local Chat = game:GetService("Chat")
+local StarterGui = game:GetService("StarterGui")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatUtil = require(Shared:WaitForChild("ChatUtil"))
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+
+local Remotes = Chat:WaitForChild("Remotes")
+local TypedInChatBar = Remotes:WaitForChild("TypedInChatBar")
+local StoppedTypingInChatBar = Remotes:WaitForChild("StoppedTypingInChatBar")
+
+local ChatScript = script.Parent.Parent
+local ChatInterface = require(ChatScript.ChatInterface)
+local MessageMode = require(ChatScript.ChatInterface.MessageMode)
+local ChatCommandInterface = require(ChatScript.ChatCommandInterface)
+local WindowFocused = require(ChatScript.ChatInterface.WindowFocused)
+local ChatBarInfo = require(ChatScript.ChatInterface.ChatBarInfo)
+
+local ChatBar = {}
+
+local chatBarParentFrame
+
+function ChatBar.create()
+	local baseChatBarParentFrameSize = UDim2.new(1, 0, 0, 42)
+	if ChatConstants.WindowResizeable then
+		baseChatBarParentFrameSize += UDim2.fromOffset(-44, 0)
+	end
+
+	chatBarParentFrame = Instance.new("Frame")
+	chatBarParentFrame.Name = "ChatBarParentFrame"
+	chatBarParentFrame.BackgroundTransparency = 1
+	chatBarParentFrame.Position = UDim2.new(0, 0, 1, -42)
+	chatBarParentFrame.Size = baseChatBarParentFrameSize
+
+	local frame = Instance.new("Frame")
+	frame.Name = "Frame"
+	frame.BackgroundColor3 = ChatConstants.GuiColors.Background
+	frame.BackgroundTransparency = 0.6
+	frame.BorderSizePixel = 0
+	frame.Size = UDim2.fromScale(1, 1)
+
+	local boxFrame = Instance.new("Frame")
+	boxFrame.Name = "BoxFrame"
+	boxFrame.BackgroundColor3 = ChatConstants.GuiColors.TextBoxBackground
+	boxFrame.BackgroundTransparency = 0.6
+	boxFrame.BorderSizePixel = 0
+	boxFrame.Position = UDim2.fromOffset(7, 7)
+	boxFrame.Size = UDim2.new(1, -14, 1, -14)
+
+	local boxFrameCover = Instance.new("Frame")
+	boxFrameCover.Name = "Cover"
+	boxFrameCover.BackgroundColor3 = Color3.new(.5, .5, .5)
+	boxFrameCover.BackgroundTransparency = 0.5
+	boxFrameCover.BorderSizePixel = 0
+	boxFrameCover.Size = UDim2.fromScale(1, 1)
+	boxFrameCover.Visible = false
+	boxFrameCover.ZIndex = 4
+	boxFrameCover.Parent = boxFrame
+
+	local chatBarFrame = Instance.new("Frame")
+	chatBarFrame.Name = "ChatBarFrame"
+	chatBarFrame.BackgroundTransparency = 1
+	chatBarFrame.Position = UDim2.fromOffset(5, 5)
+	chatBarFrame.Size = UDim2.new(1, -10, 1, -10)
+
+	local chatBar = Instance.new("TextBox")
+	chatBar.Name = "ChatBar"
+	chatBar.BackgroundTransparency = 1
+	chatBar.ClearTextOnFocus = false
+	chatBar.CursorPosition = -1
+	chatBar.FontFace = Font.new(
+		"rbxasset://fonts/families/SourceSansPro.json",
+		Enum.FontWeight.Bold,
+		Enum.FontStyle.Normal
+	)
+	chatBar.Selectable = false
+	chatBar.Size = UDim2.fromScale(1, 1)
+	chatBar.Text = ""
+	chatBar.TextColor3 = ChatConstants.GuiColors.TextBoxText
+	chatBar.TextSize = 18
+	chatBar.TextTransparency = 0.4
+	chatBar.TextWrapped = true
+	chatBar.TextXAlignment = Enum.TextXAlignment.Left
+	chatBar.TextYAlignment = Enum.TextYAlignment.Top
+	chatBar.Parent = chatBarFrame
+
+	local placeholderText = Instance.new("TextLabel")
+	placeholderText.Name = "PlaceholderText"
+	placeholderText.BackgroundTransparency = 1
+	placeholderText.FontFace = Font.new(
+		"rbxasset://fonts/families/SourceSansPro.json",
+		Enum.FontWeight.Bold,
+		Enum.FontStyle.Normal
+	)
+	placeholderText.Size = UDim2.fromScale(1, 1)
+	placeholderText.Text = `To chat click here or press "{string.char(ChatConstants.ChatKey.Value)}" key`
+	placeholderText.TextColor3 = ChatConstants.GuiColors.TextBoxText
+	placeholderText.TextSize = 18
+	placeholderText.TextTransparency = 0.4
+	placeholderText.TextWrapped = true
+	placeholderText.TextXAlignment = Enum.TextXAlignment.Left
+	placeholderText.TextYAlignment = Enum.TextYAlignment.Top
+	placeholderText.Parent = chatBarFrame
+
+	local messageModeLabel = Instance.new("TextButton")
+	messageModeLabel.Name = "MessageMode"
+	messageModeLabel.BackgroundTransparency = 1
+	messageModeLabel.FontFace = Font.new(
+		"rbxasset://fonts/families/SourceSansPro.json",
+		Enum.FontWeight.Bold,
+		Enum.FontStyle.Normal
+	)
+	messageModeLabel.Selectable = false
+	messageModeLabel.Size = UDim2.fromScale(0, 1)
+	messageModeLabel.Text = "[Team]"
+	messageModeLabel.TextSize = 18
+	messageModeLabel.TextTransparency = 0.4
+	messageModeLabel.TextWrapped = true
+	messageModeLabel.TextXAlignment = Enum.TextXAlignment.Left
+	messageModeLabel.Visible = false
+	messageModeLabel.Parent = chatBarFrame
+
+	chatBarFrame.Parent = boxFrame
+
+	boxFrame.Parent = frame
+
+	frame.Parent = chatBarParentFrame
+
+	local function onMessageModeChanged(newMessageModeProperties: MessageMode.messageModePropertiesType?)
+		if newMessageModeProperties ~= nil then
+			messageModeLabel.Text = string.format(ChatConstants.MessageModeSourceCasing, newMessageModeProperties.displayText)
+			messageModeLabel.TextColor3 = newMessageModeProperties.color
+			messageModeLabel.Visible = true
+
+			local textSizeBounds = TextService:GetTextSize(messageModeLabel.Text, messageModeLabel.TextSize, messageModeLabel.Font, Vector2.new(math.huge, math.huge))
+			messageModeLabel.Size = UDim2.fromOffset(textSizeBounds.X+2, textSizeBounds.Y)
+			chatBar.Position = UDim2.fromOffset(textSizeBounds.X+2, 0)
+			chatBar.Size = UDim2.new(1, -textSizeBounds.X-2, 1, 0)
+		else
+			-- Clear message mode
+			messageModeLabel.Visible = false
+
+			chatBar.Position = UDim2.fromOffset(0, 0)
+			chatBar.Size = UDim2.fromScale(1, 1)
+		end
+	end
+
+
+	local function onMessageEntered()
+		if chatBar.Text == "" then
+			return
+		end
+		if ChatConstants.AllowBlankMessages == false and ChatUtil.checkIsBlankString(chatBar.Text) == true then
+			return
+		end
+
+		boxFrameCover.Visible = true
+		chatBar.TextEditable = false
+
+		ChatInterface.processMessageAsync(chatBar.Text)
+
+		boxFrameCover.Visible = false
+		chatBar.Text = ""
+		chatBar.TextEditable =  true
+	end
+
+	chatBar.Focused:Connect(function()
+		placeholderText.Visible = false
+		WindowFocused.set(true)
+
+		ChatBarInfo.set("focused", true)
+		WindowFocused.update()
+	end)
+
+	chatBar.FocusLost:Connect(function(enterPressed)
+		if enterPressed then
+			onMessageEntered()
+		end
+
+		if chatBar.Text == "" and messageModeLabel.Visible == false then
+			placeholderText.Visible = true
+		end
+
+		WindowFocused.scheduleUnfocus()
+
+		ChatBarInfo.set("focused", false)
+		WindowFocused.update()
+
+		if ChatConstants.ShowWhenPlayerIsTyping then
+			StoppedTypingInChatBar:FireServer()
+		end
+	end)
+	
+	messageModeLabel.MouseButton1Down:Connect(function()
+		MessageMode.set(nil)
+	end)
+
+	local chatBarTextAMomentAgo = ""
+	chatBar:GetPropertyChangedSignal("Text"):Connect(function()
+		if ChatConstants.ShowWhenPlayerIsTyping then
+			if chatBar.Text == "" then
+				StoppedTypingInChatBar:FireServer()
+			else
+				TypedInChatBar:FireServer()
+			end
+		end
+
+		if chatBar.Text ~= "" then
+			placeholderText.Visible = false
+		end
+
+		if string.len(chatBar.Text) > ChatConstants.MessageCharacterLimit then
+			chatBar.Text = string.sub(chatBar.Text, 1, ChatConstants.MessageCharacterLimit)
+		end
+
+		if string.sub(chatBar.Text, 1, string.len(ChatConstants.CommandPrefix)) == ChatConstants.CommandPrefix then
+			-- Player is typing a command
+			local messageWithoutPrefix = string.sub(chatBar.Text, string.len(ChatConstants.CommandPrefix) + 1)
+			local split = string.split(messageWithoutPrefix, " ")
+
+			local command, originalCommandName = ChatCommandInterface.getCommandInfo(split[1])
+			ChatUtil.debugPrint(command, originalCommandName)
+
+			if command ~= nil then
+				if MessageMode.get() == nil and command.shouldEnableMessageMode ~= nil then
+					local shouldEnable, internalName, displayText, color, metadata = command.shouldEnableMessageMode(chatBar.Text)
+					if shouldEnable then
+						-- Set message mode
+						chatBar.Text = ""
+						MessageMode.set({
+							commandName = originalCommandName,
+							name = internalName,
+							displayText = displayText,
+							color = color,
+							metadata = metadata
+						})
+					end
+				end
+			end
+		end
+
+		local textSizeBounds = TextService:GetTextSize(chatBar.Text, chatBar.TextSize, chatBar.Font, Vector2.new(chatBarFrame.AbsoluteSize.X, math.huge))
+		chatBarParentFrame.Size = baseChatBarParentFrameSize + UDim2.fromOffset(0, textSizeBounds.Y - chatBar.TextSize)
+
+		ChatBarInfo.set("text", chatBar.Text)
+
+		-- If we don't do this, deleting the character after the message mode will immediately delete the message mode
+		-- ex: Backspacing on "[Team] a" will delete everything, because the text changing registers before the clear message mode check
+		task.wait()
+		chatBarTextAMomentAgo = chatBar.Text
+	end)
+
+	local contextActionFunctions = {
+		OpenChat = function()
+			if StarterGui:GetCore("ChatActive") == false then	
+				StarterGui:SetCore("ChatActive", true)
+			end
+
+			task.wait() -- Ensures the key used to focus on the chat bar doesn't get used as input in the chat bar
+			chatBar:CaptureFocus()
+		end,
+	}
+
+	local function handleAction(actionName: string, inputState: Enum.UserInputState, inputObject: InputObject)
+		if inputState ~= Enum.UserInputState.Begin then
+			return Enum.ContextActionResult.Pass
+		end
+		if contextActionFunctions[actionName] then
+			contextActionFunctions[actionName](actionName, inputState, inputObject)
+		end
+	end
+
+	local readyToDeleteMessageMode = false
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if not processed then
+			return
+		end
+		if input.KeyCode ~= Enum.KeyCode.Backspace then
+			return
+		end
+
+		if chatBar:IsFocused() and MessageMode.get() ~= nil and chatBarTextAMomentAgo == "" then
+			-- Backspaced on an empty chatbar; clear message mode
+			MessageMode.set(nil)
+		end
+	end)
+
+	ContextActionService:BindActionAtPriority("OpenChat", handleAction, false, 5, ChatConstants.ChatKey)
+	MessageMode.getBindable().Event:Connect(onMessageModeChanged)
+
+	return chatBarParentFrame
+end
+
+return ChatBar]]></ProtectedString>
+						<string name="ScriptGuid">{57F4558F-E447-45DB-89F9-61638EB41F54}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<string name="Name">ChatBar</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBXFB23C4A741464D289908883A7A25EAE0">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- // Creates and manages the frame in which messages are displayed.
+
+local Chat = game:GetService("Chat")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+
+local ChatScript = script.Parent.Parent
+local Message = require(script.Message)
+local MessageLog = require(ChatScript.ChatInterface.MessageLog)
+
+local ChatChannel = {}
+
+function ChatChannel.create()
+	local chatChannelParentFrame = Instance.new("Frame")
+	chatChannelParentFrame.Name = "ChatChannelParentFrame"
+	chatChannelParentFrame.BackgroundColor3 = ChatConstants.GuiColors.Background
+	chatChannelParentFrame.BackgroundTransparency = 0.6
+	chatChannelParentFrame.BorderSizePixel = 0
+	chatChannelParentFrame.Position = UDim2.fromOffset(0, 2)
+	chatChannelParentFrame.Size = UDim2.new(1, 0, 1, -46)
+
+	local frameMessageLogDisplay = Instance.new("Frame")
+	frameMessageLogDisplay.Name = "Frame_MessageLogDisplay"
+	frameMessageLogDisplay.BackgroundTransparency = 1
+	frameMessageLogDisplay.Size = UDim2.fromScale(1, 1)
+
+	local scroller = Instance.new("ScrollingFrame")
+	scroller.Name = "Scroller"
+	scroller.Active = true
+	scroller.BackgroundTransparency = 1
+	scroller.BorderSizePixel = 0
+	scroller.CanvasSize = UDim2.fromOffset(0, 0)
+	scroller.Position = UDim2.fromOffset(0, 3)
+	scroller.ScrollBarThickness = 4
+	scroller.Selectable = false
+	scroller.ScrollingDirection = Enum.ScrollingDirection.Y
+	scroller.Size = UDim2.new(1, -4, 1, -6)
+	
+	scroller.AutomaticCanvasSize = Enum.AutomaticSize.Y
+
+	local uIListLayout = Instance.new("UIListLayout")
+	uIListLayout.Name = "UIListLayout"
+	uIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	uIListLayout.Parent = scroller
+
+	scroller.Parent = frameMessageLogDisplay
+
+	frameMessageLogDisplay.Parent = chatChannelParentFrame
+	
+	local lastAbsoluteCanvasSize = scroller.AbsoluteCanvasSize
+	scroller:GetPropertyChangedSignal("AbsoluteCanvasSize"):Connect(function()
+		if scroller.AbsoluteWindowSize.Y >= scroller.AbsoluteCanvasSize.Y then
+			-- The current window size can fit all of its contents, which means no scroll bar exists yet
+			return
+		end
+		
+		task.wait() -- Wait for position to be set
+		
+		local newAbsoluteCanvasSize = scroller.AbsoluteCanvasSize
+		local difference = newAbsoluteCanvasSize.Y - lastAbsoluteCanvasSize.Y
+		
+		local scrollablePixels = scroller.AbsoluteCanvasSize.Y - scroller.AbsoluteSize.Y
+		local pixelsFromBottom = scrollablePixels - scroller.CanvasPosition.Y
+		
+		if pixelsFromBottom - math.max(0, difference) < 5 then
+			-- Hacky workaround for scroller sometimes not shifting downwards properly
+			scroller.CanvasPosition += Vector2.new(0, 999999999999)
+		elseif difference > 0 then -- If difference is negative, an object is being removed, which causes the scroll bar to move down anyways
+			-- Shift scroll bar down by Y difference
+			scroller.CanvasPosition += Vector2.new(0, difference)
+		end
+		
+		lastAbsoluteCanvasSize = newAbsoluteCanvasSize
+	end)
+	
+	MessageLog.registerMessageAddedCallback(function(textChatMessage)
+		local frame = Message.create(textChatMessage)
+		frame.Parent = scroller
+		frame.LayoutOrder = ChatConstants.MessageLogLimit
+		
+		-- Shift all other messages' LayoutOrders down by 1
+		for _,v in scroller:GetChildren() do
+			if v:IsA("Frame") then
+				v.LayoutOrder -= 1
+			end
+		end
+	end)
+	
+	MessageLog.registerMessageOverflowCallback(function(textChatMessage)
+		-- Delete message
+		local frame = scroller:FindFirstChild(textChatMessage.MessageId)
+		if frame then
+			frame:Destroy()
+		end
+	end)
+	
+	return chatChannelParentFrame
+end
+
+return ChatChannel]]></ProtectedString>
+						<string name="ScriptGuid">{526D5CAA-F83F-42EE-8076-032E5DABFD00}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<string name="Name">ChatChannel</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+					</Properties>
+					<Item class="ModuleScript" referent="RBXD6A4A872BD604B4EB697189C20DB9FF4">
+						<Properties>
+							<Content name="LinkedSource"><null></null></Content>
+							<ProtectedString name="Source"><![CDATA[-- // Creates individual chat messages in the chat window.
+
+local TextService = game:GetService("TextService")
+local Players = game:GetService("Players")
+local Chat = game:GetService("Chat")
+local Teams = game:GetService("Teams")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+local ChatUtil = require(Shared:WaitForChild("ChatUtil"))
+
+local ChatScript = script.Parent.Parent.Parent
+local MessageMode = require(ChatScript.ChatInterface.MessageMode)
+
+local localPlayer = Players.LocalPlayer
+
+local Message = {}
+
+local function getOverrideOrDefault(override: any, default: any)
+	if override ~= nil then
+		return override
+	else
+		return default
+	end
+end
+
+function Message.create(
+	textChatMessage: TextChatMessage,
+	overrides: {
+		SourceText: string?,
+		SourceTextColor: Color3?,
+
+		Font: Font?,
+		TextSize: number?,
+		MessageTextColor: Color3?,
+	}?)
+
+	local messageText: string
+	local font: Font, textSize: number, messageTextColor: Color3
+	local sourceText: string, sourceTextColor: Color3
+	if overrides == nil then
+		overrides = {}
+	end
+
+	local defaultMessageTextColor = ChatConstants.GuiColors.Text
+
+	local speaker: Player?
+	if textChatMessage.TextSource ~= nil then
+		speaker = Players:GetPlayerByUserId(textChatMessage.TextSource.UserId)
+
+		local speakerProperties = speaker.SpeakerProperties
+		local chatColorObject: Color3Value = speakerProperties:FindFirstChild("ChatColor")
+		if chatColorObject ~= nil then
+			defaultMessageTextColor = chatColorObject.Value
+		end
+	end
+
+	font = getOverrideOrDefault(overrides.Font, ChatConstants.Font)
+	textSize = getOverrideOrDefault(overrides.TextSize, ChatConstants.TextSize)
+	messageTextColor = getOverrideOrDefault(overrides.MessageTextColor, defaultMessageTextColor)
+
+	sourceText = overrides.SourceText
+	sourceTextColor = overrides.SourceTextColor
+
+	if textChatMessage.Status == Enum.TextChatMessageStatus.TextFilterFailed then
+		messageText = "[ Failed to filter message ]"
+	else
+		messageText = textChatMessage.Text
+	end
+
+	-- Gui creation
+	local frame = Instance.new("Frame")
+	frame.Name = textChatMessage.MessageId
+	frame.BackgroundTransparency = 1
+	frame.Size = UDim2.new(1, 0, 0, 18)
+	frame.AutomaticSize = Enum.AutomaticSize.Y
+
+	local messageLabel = Instance.new("TextLabel")
+	messageLabel.Name = "MessageLabel"
+	messageLabel.BackgroundTransparency = 1
+	messageLabel.ClipsDescendants = true
+	messageLabel.Font = font
+	messageLabel.TextSize = textSize
+	messageLabel.Position = UDim2.fromOffset(8, 0)
+	messageLabel.RichText = true
+	messageLabel.Size = UDim2.new(1, -14, 0, 0)
+	messageLabel.AutomaticSize = Enum.AutomaticSize.Y
+	messageLabel.TextColor3 = messageTextColor
+	messageLabel.TextStrokeTransparency = 0.75
+	messageLabel.TextWrapped = true
+	messageLabel.TextXAlignment = Enum.TextXAlignment.Left
+	messageLabel.TextYAlignment = Enum.TextYAlignment.Top
+
+	if textChatMessage.TextSource ~= nil or sourceText ~= nil then
+		if textChatMessage.TextSource ~= nil then
+			-- Use player's properties
+			local textChannel = textChatMessage.TextChannel
+
+			if sourceText == nil then
+				if ChatConstants.UseDisplayNames then
+					sourceText = string.format(ChatConstants.PlayerSourceCasing, speaker.DisplayName)
+				else
+					sourceText = string.format(ChatConstants.PlayerSourceCasing, speaker.Name)
+				end
+			end
+
+			-- Add chat tags
+			local chatTagsFolder = speaker.SpeakerProperties:FindFirstChild("Tags")
+			if chatTagsFolder ~= nil then
+				local tagList: {Color3Value} = chatTagsFolder:GetChildren()
+				table.sort(tagList, function(a, b)
+					local priorityA = a:GetAttribute("Priority") or 1
+					local priorityB = b:GetAttribute("Priority") or 1
+
+					return priorityA > priorityB
+				end)
+
+				for _,chatTagObject in tagList do
+					local chatTag = string.format(ChatConstants.TagCasing, chatTagObject.Name)
+					if not chatTagObject:GetAttribute("NoColor") then
+						chatTag = `<font color="#{chatTagObject.Value:ToHex()}">{chatTag}</font>`
+					end
+					sourceText = `{chatTag} {sourceText}`
+				end
+			end
+
+			if string.sub(textChannel.Name, 1, 7) == "Whisper" then
+				local split = string.split(textChannel.Name, "/")
+				local playerName1 = split[2]
+				local playerName2 = split[3]
+
+				local otherPlayerName
+				if playerName1 == localPlayer.Name then
+					otherPlayerName = playerName2
+				elseif playerName2 == localPlayer.Name then
+					otherPlayerName = playerName1
+				end
+
+				if otherPlayerName ~= nil then
+					-- This is a whisper; add whisper tag
+					local whisperTag
+					if speaker == localPlayer then
+						whisperTag = string.format(ChatConstants.SystemSourceCasing, `To {otherPlayerName}`)
+					else
+						whisperTag = string.format(ChatConstants.SystemSourceCasing, `From {speaker.Name}`)
+					end
+					whisperTag = `<font color="#ffffff">{whisperTag}</font>`
+					sourceText = `{whisperTag} {sourceText}`
+				end
+			end
+
+			if speaker.Team ~= nil then
+				-- Use team color
+				local teamColor3 = speaker.TeamColor.Color
+				if sourceTextColor == nil then
+					sourceTextColor = teamColor3
+				end
+
+				if string.sub(textChannel.Name, 1, 7) == "RBXTeam" then
+					-- Add team tag
+					local teamTag = string.format(ChatConstants.SystemSourceCasing, "Team")
+					sourceText = `{teamTag} {sourceText}`
+
+					-- Override message color with player's team color
+					messageLabel.TextColor3 = teamColor3
+				end
+			else
+				-- Use default color
+				if sourceTextColor == nil then
+					sourceTextColor = ChatUtil.getDefaultUsernameColor(speaker.Name)
+				end
+			end
+		end
+
+		local sourceLabel = Instance.new("TextButton")
+		sourceLabel.Name = "SourceLabel"
+		sourceLabel.BackgroundTransparency = 1
+		sourceLabel.Font = font
+		sourceLabel.TextSize = textSize
+		sourceLabel.RichText = true
+		sourceLabel.Selectable = false
+		sourceLabel.TextColor3 = sourceTextColor
+		sourceLabel.TextStrokeTransparency = 0.75
+		sourceLabel.TextXAlignment = Enum.TextXAlignment.Left
+		sourceLabel.TextYAlignment = Enum.TextYAlignment.Top
+		sourceLabel.Parent = messageLabel
+		sourceLabel.Text = sourceText
+
+		local sourceLabelSize = TextService:GetTextSize(ChatUtil.removeRichTextTags(sourceLabel.Text), sourceLabel.TextSize, sourceLabel.Font, Vector2.new(math.huge, math.huge))
+		sourceLabel.Size = UDim2.fromOffset(sourceLabelSize.X+1, sourceLabelSize.Y)
+
+		if speaker ~= nil and speaker ~= localPlayer then
+			sourceLabel.MouseButton1Down:Connect(function()
+				if MessageMode.get() ~= nil then
+					return
+				end
+
+				local chatGui = frame.Parent.Parent.Parent.Parent.Parent
+				local chatBar: TextBox = chatGui.Frame.ChatBarParentFrame.Frame.BoxFrame.ChatBarFrame.ChatBar
+				chatBar.Text = `{ChatConstants.CommandPrefix}whisper {speaker.Name}`
+			end)
+		end
+	end
+
+	if sourceText ~= nil then
+		-- Add spacing for source text
+		messageLabel.Text = `<font transparency = "1"><stroke transparency="1">{sourceText}</stroke></font> {messageText}`
+	else
+		messageLabel.Text = messageText
+	end
+
+	messageLabel.Parent = frame
+
+	return frame
+end
+
+return Message]]></ProtectedString>
+							<string name="ScriptGuid">{65016D86-64A4-4C3B-978B-2C1D9774708B}</string>
+							<BinaryString name="AttributesSerialize"></BinaryString>
+							<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+							<bool name="DefinesCapabilities">false</bool>
+							<string name="Name">Message</string>
+							<int64 name="SourceAssetId">-1</int64>
+							<BinaryString name="Tags"></BinaryString>
+						</Properties>
+					</Item>
+				</Item>
+				<Item class="ModuleScript" referent="RBX757BCEBAF41C4CAB8D8C24F35654FC9D">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- // Creates and manages a draggable button that can resize the chat window.
+
+local Chat = game:GetService("Chat")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+
+local camera = workspace.CurrentCamera
+local guiInsetMin, guiInsetMax = GuiService:GetGuiInset()
+
+local ResizeButton = {}
+
+function ResizeButton.create()
+	local resizeButton = Instance.new("ImageButton")
+	resizeButton.Name = "ResizeButton"
+	resizeButton.BackgroundColor3 = ChatConstants.GuiColors.Background
+	resizeButton.BackgroundTransparency = 0.6
+	resizeButton.BorderSizePixel = 0
+	resizeButton.Position = UDim2.new(1, -42, 1, -42)
+	resizeButton.Selectable = false
+	resizeButton.Size = UDim2.fromOffset(42, 42)
+
+	local imageLabel = Instance.new("ImageLabel")
+	imageLabel.Name = "ImageLabel"
+	imageLabel.BackgroundTransparency = 1
+	imageLabel.Image = "rbxassetid://261880743"
+	imageLabel.ImageTransparency = 0.6
+	imageLabel.Position = UDim2.fromScale(0.2, 0.2)
+	imageLabel.Size = UDim2.fromScale(0.8, 0.8)
+	imageLabel.Parent = resizeButton
+
+	local dragThread: thread? = nil
+
+	local function beginDragging()
+		if dragThread ~= nil then
+			return
+		end
+		local topFrame: Frame = resizeButton.Parent
+		if topFrame == nil then
+			return
+		end
+
+		dragThread = task.spawn(function()
+			local mouseLocation = UserInputService:GetMouseLocation()
+			local sizeMinimum, sizeMaximum = ChatConstants.ChatWindowSizeBoundsPixels.Minimum, ChatConstants.ChatWindowSizeBoundsPixels.Maximum
+			if not ChatConstants.DefaultChatEnabled then
+				sizeMinimum = Vector2.new(sizeMinimum.X, 42)
+				sizeMaximum = Vector2.new(sizeMaximum.X, 42)
+			end
+
+			local defaultChatWindowSizeScale = ChatConstants.DefaultChatWindowSizeScale
+
+			--[[
+			-- Offset of the mouse's position relative to the button on first click
+			local attachPointOffset = Vector2.new(
+				(resizeButton.AbsolutePosition.X - mouseLocation.X),
+				(resizeButton.AbsolutePosition.Y + 60 - mouseLocation.Y) -- The Y value of AbsolutePosition is 60px too far up because god knows why
+			)
+			]]
+
+			while task.wait() do
+				mouseLocation = UserInputService:GetMouseLocation()
+
+				local sizeToPoint = mouseLocation
+				sizeToPoint += Vector2.new(4, 4)
+				sizeToPoint -= Vector2.new(0, 60) -- The Y value of AbsolutePosition is 60px too far up because god knows why
+
+				local newSizePixels = Vector2.new(
+					math.clamp(sizeToPoint.X - topFrame.AbsolutePosition.X, sizeMinimum.X, sizeMaximum.X),
+					math.clamp(sizeToPoint.Y - topFrame.AbsolutePosition.Y, sizeMinimum.Y, sizeMaximum.Y)
+				)
+
+				-- Snap either axis to default size if close enough
+				local safeAreaPixels: Vector2 = camera.ViewportSize - guiInsetMin - guiInsetMax
+				local minimumSize = ChatConstants.ChatWindowSizeBoundsPixels.Minimum
+				local defaultChatWindowSizePixels = safeAreaPixels * defaultChatWindowSizeScale
+
+				local offsetToDefaultSize = defaultChatWindowSizePixels - newSizePixels
+				local newX, newY = newSizePixels.X, newSizePixels.Y
+
+				if math.abs(offsetToDefaultSize.X) < 10 then
+					newX = defaultChatWindowSizePixels.X
+				end
+				if math.abs(offsetToDefaultSize.Y) < 10 then
+					newY = defaultChatWindowSizePixels.Y
+				end
+
+				newSizePixels = Vector2.new(newX, newY)
+
+				local newSize = UDim2.fromOffset(newSizePixels.X, newSizePixels.Y)
+
+				topFrame.Size = newSize
+			end
+		end)
+	end
+
+	local function stopDragging()
+		if dragThread ~= nil then
+			task.cancel(dragThread)
+			dragThread = nil
+		end
+	end
+
+	resizeButton.MouseButton1Down:Connect(beginDragging)
+	UserInputService.InputEnded:Connect(function(input, _gameProcessedEvent)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			stopDragging()
+		end
+	end)
+
+	return resizeButton
+end
+
+return ResizeButton]]></ProtectedString>
+						<string name="ScriptGuid">{DAB8485A-F2D8-4D38-BF5E-82D0F4605F7F}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<string name="Name">ResizeButton</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+					</Properties>
+				</Item>
+			</Item>
+			<Item class="ModuleScript" referent="RBX11D171A984F94330B0E9FC5F3A953FA7">
+				<Properties>
+					<Content name="LinkedSource"><null></null></Content>
+					<ProtectedString name="Source"><![CDATA[-- // Handles general chat functionality.
+
+local TextChatService = game:GetService("TextChatService")
+local Chat = game:GetService("Chat")
+
+local TextChannels = TextChatService:WaitForChild("TextChannels")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatUtil = require(Shared:WaitForChild("ChatUtil"))
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+
+local Remotes = Chat:WaitForChild("Remotes")
+local RunChatCommand = Remotes:WaitForChild("RunChatCommand")
+
+local CurrentChannel = require(script.CurrentChannel)
+local MessageLog = require(script.MessageLog)
+local MessageMode = require(script.MessageMode)
+local WindowFocused = require(script.WindowFocused)
+local ChatCommandInterface = require(script.Parent.ChatCommandInterface)
+local SystemMessages = require(script.SystemMessages)
+
+local processingMessage = false
+
+local ChatInterface = {}
+
+function ChatInterface.isProcessingMessage()
+	return processingMessage
+end
+
+function ChatInterface.processMessageAsync(message: string)
+	if processingMessage then
+		return
+	end
+	
+	processingMessage = true
+	
+	local metadata: string? = nil
+	
+	local rawCommandName: string? = nil
+	
+	local commandInfo = ChatUtil.getCommandInfoFromMessage(message)
+	local messageModeProperties = MessageMode.get()
+	
+	if commandInfo.rawCommandName ~= nil then
+		-- We can tell this is a command from the contents of the message
+		rawCommandName = commandInfo.rawCommandName
+	elseif messageModeProperties ~= nil then
+		-- We can tell this is a command from a MessageMode existing
+		rawCommandName = messageModeProperties.commandName
+	end
+	
+	if rawCommandName ~= nil then
+		local command, originalCommandName = ChatCommandInterface.getCommandInfo(rawCommandName)
+		if command ~= nil then
+			-- Player is running a command
+			ChatUtil.debugPrint(`Running command: {originalCommandName}. Arguments: {table.concat(commandInfo.arguments, ", ")}`)
+			
+			if messageModeProperties ~= nil and messageModeProperties.metadata ~= nil then
+				metadata = messageModeProperties.metadata
+			end
+			
+			local shouldFireRemote, shouldSendToChat = command.onSending(message)
+			if shouldFireRemote then
+				RunChatCommand:FireServer(originalCommandName, commandInfo.arguments, metadata)
+			end
+			
+			if not shouldSendToChat then
+				-- Great, nothing else left to do here
+				processingMessage = false
+				return
+			end
+		end
+	end
+	
+	local channel = CurrentChannel.get()
+	if channel == nil then
+		warn("No channel selected")
+		processingMessage = false
+		return
+	end
+	
+	ChatUtil.debugPrint(`Sending message: {message}`)
+	task.spawn(function()
+		channel:SendAsync(message, metadata)
+		CurrentChannel._onMessageSent()
+	end)
+	processingMessage = false 
+end
+
+function ChatInterface.init()
+	CurrentChannel.init()
+	MessageLog.init()
+	WindowFocused.init()
+	SystemMessages.init()
+end
+
+return ChatInterface]]></ProtectedString>
+					<string name="ScriptGuid">{B4632352-2C4E-41F1-A37E-0C4E398EB61C}</string>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">ChatInterface</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+				<Item class="ModuleScript" referent="RBXD565EC8E8A53422295D2D23FFD26372D">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- // Keeps track of which channel the player is currently viewing.
+
+local TextChatService = game:GetService("TextChatService")
+local Chat = game:GetService("Chat")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatUtil = require(Shared:WaitForChild("ChatUtil"))
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+local ChatScript = script.Parent.Parent
+
+local TextChannels
+
+local CurrentChannel = {}
+
+local currentChannel: TextChannel?
+local returnChannel: TextChannel?
+
+function CurrentChannel.get(): TextChannel?
+	return currentChannel
+end
+
+function CurrentChannel._onMessageSent()
+	if returnChannel ~= nil then
+		currentChannel = returnChannel
+		ChatUtil.debugPrint(`Channel set back to {returnChannel}`)
+		returnChannel = nil
+	end
+end
+
+function CurrentChannel.set(channelName: string): boolean
+	if TextChannels == nil then
+		repeat task.wait() until TextChannels ~= nil
+	end
+	local newChannel = TextChannels:FindFirstChild(channelName)
+	if newChannel == nil then
+		warn(`Channel named "{channelName}" does not exist`)
+		
+		return false
+	end
+	ChatUtil.debugPrint(`Current channel: {newChannel}`)
+	currentChannel = newChannel
+	
+	return true
+end
+
+function CurrentChannel.setOnlyForNextMessage(channelName: string)
+	local lastChannel = currentChannel
+	
+	local success = CurrentChannel.set(channelName)
+	if not success then
+		return
+	end
+	
+	returnChannel = lastChannel
+end
+
+function CurrentChannel.init()
+	task.spawn(function()
+		TextChannels = TextChatService:WaitForChild("TextChannels")
+		CurrentChannel.set(ChatConstants.DefaultChannel)
+	end)
+end
+
+return CurrentChannel]]></ProtectedString>
+						<string name="ScriptGuid">{2854A2C6-3AE2-48BB-9C87-534EB9BC3CD9}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<string name="Name">CurrentChannel</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBXFAFB6075406D42A78B8165F9E8B1D990">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- // Tracks the current message mode.
+
+local Chat = game:GetService("Chat")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatUtil = require(Shared:WaitForChild("ChatUtil"))
+
+local MessageMode = {}
+
+local messageMode: string? = nil
+
+export type messageModePropertiesType = {
+	commandName: string,
+	name: string,
+	displayText: string,
+	color: Color3,
+	
+	metadata: string?,
+}
+local messageModeProperties: messageModePropertiesType? = nil
+
+local messageModeChangedBindable = Instance.new("BindableEvent")
+messageModeChangedBindable.Name = "MessageModeChangedBindable"
+
+function MessageMode.get()
+	return messageModeProperties
+end
+
+function MessageMode.getBindable()
+	return messageModeChangedBindable
+end
+
+function MessageMode.set(newMessageModeProperties: messageModePropertiesType?)
+	if newMessageModeProperties == nil then
+		if messageModeProperties == nil then
+			return
+		end
+	else
+		if messageModeProperties ~= nil and newMessageModeProperties.name == messageModeProperties.name then
+			return
+		end
+	end
+	
+	ChatUtil.debugPrint(`Message mode set to {tostring(newMessageModeProperties and newMessageModeProperties.name)}`)
+	
+	messageMode = newMessageModeProperties and newMessageModeProperties.name
+	messageModeProperties = newMessageModeProperties
+	
+	messageModeChangedBindable:Fire(newMessageModeProperties)
+end
+
+return MessageMode]]></ProtectedString>
+						<string name="ScriptGuid">{E36E3083-55C8-4411-BC08-77C390A5532F}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<string name="Name">MessageMode</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBXE637261D74DD45A08AA96EE11B3E3B4A">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- // A log of all recent messages, up to MessageLogLimit.
+
+local TextChatService = game:GetService("TextChatService")
+local Chat = game:GetService("Chat")
+local Players = game:GetService("Players")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+local ChatUtil = require(Shared:WaitForChild("ChatUtil"))
+
+local ChatScript = script.Parent.Parent
+local MutedPlayers = require(ChatScript.MutedPlayers)
+
+local MessageLog = {}
+
+local messageLog: {TextChatMessage} = {}
+local messageAddedCallbacks: {(textChatMessage: TextChatMessage) -> (any)} = {}
+local messageOverflowCallbacks: {(textChatMessage: TextChatMessage) -> (any)} = {}
+
+function MessageLog.registerMessageAddedCallback(callback: (textChatMessage: TextChatMessage) -> (any))
+	table.insert(messageAddedCallbacks, callback)
+end
+
+function MessageLog.registerMessageOverflowCallback(callback: (textChatMessage: TextChatMessage) -> (any))
+	table.insert(messageOverflowCallbacks, callback)
+end
+
+function MessageLog.getLog()
+	return messageLog
+end
+
+function MessageLog.init()
+	TextChatService.MessageReceived:Connect(function(textChatMessage)
+		if textChatMessage.Status ~= Enum.TextChatMessageStatus.Success and textChatMessage.Status ~= Enum.TextChatMessageStatus.TextFilterFailed then
+			-- Ignore message due to miscellaneous error
+			return
+		end
+		if textChatMessage.TextSource ~= nil and MutedPlayers.isMuted(Players:GetPlayerByUserId(textChatMessage.TextSource.UserId)) then
+			-- Ignore message due to this player being muted
+			return
+		end
+		
+		ChatUtil.debugPrint(`Received message in TextChannel {textChatMessage.TextChannel.Name}: [{if textChatMessage.TextSource then textChatMessage.TextSource.Name else "System"}]: {textChatMessage.Text}`)
+		if #messageLog == ChatConstants.MessageLogLimit then
+			-- Remove oldest message and shift all elements back by one to make space
+			local oldestTextChatMessage = messageLog[1]
+			for _,callback in messageOverflowCallbacks do
+				task.spawn(callback, oldestTextChatMessage)
+			end
+			table.remove(messageLog, 1)
+		end
+		table.insert(messageLog, textChatMessage)
+		
+		for _,callback in messageAddedCallbacks do
+			task.spawn(callback, textChatMessage)
+		end
+	end)
+end
+
+return MessageLog]]></ProtectedString>
+						<string name="ScriptGuid">{B8F8B00A-BD4A-4116-BC87-DC3D68F6DFFE}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<string name="Name">MessageLog</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX8B2845FF4FD444EF9CEA03F7E7C3949E">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- // Tracks whether the window should be visible or transparent.
+
+-- Fade in/out behavior is under GuiCreator.
+
+local Chat = game:GetService("Chat")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatUtil = require(Shared:WaitForChild("ChatUtil"))
+
+local WindowFocusedModule = {}
+
+local windowFocused: boolean = true
+local automaticDefocusThread: thread? = nil
+
+local MouseHoveringOverWindow = require(script.Parent.MouseHoveringOverWindow)
+local ChatBarInfo = require(script.Parent.ChatBarInfo)
+
+local changedBindable = Instance.new("BindableEvent")
+changedBindable.Name = "MessageModeChangedBindable"
+
+function WindowFocusedModule.get()
+	return windowFocused
+end
+
+function WindowFocusedModule.getBindable()
+	return changedBindable
+end
+
+local function cancelScheduledUnfocus()
+	if automaticDefocusThread ~= nil then
+		task.cancel(automaticDefocusThread)
+		automaticDefocusThread = nil
+		-- ChatUtil.debugPrint(`Unfocus cancelled`)
+	end
+end
+
+function WindowFocusedModule.set(newState: boolean)
+	if newState == true and automaticDefocusThread ~= nil then
+		cancelScheduledUnfocus()
+	end
+	if newState == windowFocused then 
+		return
+	end
+	
+	-- ChatUtil.debugPrint(if newState then "Window focused" else "Window unfocused")
+	windowFocused = newState
+	changedBindable:Fire(newState)
+end
+
+function WindowFocusedModule.scheduleUnfocus()
+	cancelScheduledUnfocus()
+	automaticDefocusThread = task.delay(4, function()
+		WindowFocusedModule.set(false)
+	end)
+	-- ChatUtil.debugPrint(`Unfocus scheduled`)
+end
+
+function WindowFocusedModule.update()
+	-- ChatUtil.debugPrint(MouseHoveringOverWindow.get())
+	-- ChatUtil.debugPrint(ChatBarInfo.get().focused)
+	if MouseHoveringOverWindow.get() == true or ChatBarInfo.get().focused then
+		WindowFocusedModule.set(true)
+	else
+		WindowFocusedModule.scheduleUnfocus()
+	end
+end
+
+function WindowFocusedModule.init()
+	WindowFocusedModule.update()
+end
+
+return WindowFocusedModule]]></ProtectedString>
+						<string name="ScriptGuid">{C1570458-E540-4A51-B90A-CB266A3D44A0}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<string name="Name">WindowFocused</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX41E6023983014AF1B92B9A398F59652B">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- // Tracks whether the mouse is hovering over the chat window.
+
+local MouseHoveringOverWindow = {}
+
+local isHovering: boolean = false
+
+function MouseHoveringOverWindow.get()
+	return isHovering
+end
+
+function MouseHoveringOverWindow.set(newState: boolean)
+	if newState == isHovering then 
+		return
+	end
+	isHovering = newState
+end
+
+return MouseHoveringOverWindow]]></ProtectedString>
+						<string name="ScriptGuid">{6EC081D4-CB42-49D0-BED8-1A676622D00F}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<string name="Name">MouseHoveringOverWindow</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX809A0827EC4443B09E5008E510BA8B57">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- // Tracks miscellaneous chat bar information.
+
+local ChatBarInfo = {}
+
+export type chatBarStateType = {
+	focused: boolean,
+	text: string,
+}
+
+local chatBarState: chatBarStateType = {
+	focused = false,
+	text = "",
+}
+
+function ChatBarInfo.get()
+	return chatBarState
+end
+
+function ChatBarInfo.set(property: string, value: any)
+	if chatBarState[property] == value then
+		return
+	end
+	chatBarState[property] = value
+end
+
+return ChatBarInfo]]></ProtectedString>
+						<string name="ScriptGuid">{D03E575C-A257-495B-BE52-3815FBEB245B}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<string name="Name">ChatBarInfo</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX396F02D28FD64CE48D9F6E69200E966E">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- // Handles custom system messages.
+
+local TextChatService = game:GetService("TextChatService")
+local Chat = game:GetService("Chat")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatUtil = require(Shared:WaitForChild("ChatUtil"))
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+
+local Remotes = Chat:WaitForChild("Remotes")
+local DisplaySystemMessage = Remotes:WaitForChild("DisplaySystemMessage")
+
+local TextChannels = TextChatService:WaitForChild("TextChannels")
+
+local SystemMessages = {}
+
+function SystemMessages.displaySystemMessage(message: string, metadata: string?)
+	local sytemChannel: TextChannel = TextChannels[ChatConstants.SystemMessageChannel]
+	sytemChannel:DisplaySystemMessage(message, metadata)
+end
+
+function SystemMessages.init()
+	DisplaySystemMessage.OnClientEvent:Connect(function(messageData: {text: string, textColor: Color3?})
+		local text = messageData.text
+		if messageData.textColor ~= nil then
+			text = `<font color=#{messageData.textColor:ToHex()}>{text}</font>`
+		end
+		
+		SystemMessages.displaySystemMessage(text)
+	end)
+
+	local message = string.format(ChatConstants.SystemMessages.Welcome.General, ChatConstants.CommandPrefix, ChatConstants.CommandPrefix) -- idk why I have to add this twice
+	SystemMessages.displaySystemMessage(message)
+end
+
+return SystemMessages]]></ProtectedString>
+						<string name="ScriptGuid">{125DED05-E6DD-44EB-A0AA-A30D98A65460}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<string name="Name">SystemMessages</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+					</Properties>
+				</Item>
+			</Item>
+			<Item class="ModuleScript" referent="RBX29AC9F8073FF40B0A8EF55C12DAF738A">
+				<Properties>
+					<Content name="LinkedSource"><null></null></Content>
+					<ProtectedString name="Source"><![CDATA[-- // The interface for getting client-sided chat commands.
+
+local Chat = game:GetService("Chat")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+
+local ChatCommandInterface = {}
+
+type clientChatCommand = {
+	alternateNames: {string}?,
+	onSending: (message: string) -> (boolean, boolean),
+	shouldEnableMessageMode: ((message: string) -> (boolean, string?, string?, Color3?, string?))?,
+}
+
+local commandModuleList: {[string]: {command: clientChatCommand, originalName: string}} = {}
+
+function ChatCommandInterface.getCommandInfo(commandName: string): clientChatCommand?
+	local commandModuleInfo = commandModuleList[commandName]
+	if commandModuleInfo ~= nil then
+		return commandModuleInfo.command, commandModuleInfo.originalName
+	else
+		return nil, nil
+	end
+end
+
+function ChatCommandInterface.init()
+	-- Cache all modules using their name and alternate names as keys
+	for _,moduleInstance in script:GetChildren() do
+		if moduleInstance.Name == "template" or table.find(ChatConstants.BlacklistedCommands, moduleInstance.Name) then 
+			continue
+		end
+		local module: clientChatCommand = require(moduleInstance)
+		commandModuleList[moduleInstance.Name] = {
+			command = module,
+			originalName = moduleInstance.Name,
+		}
+		if module.alternateNames ~= nil then
+			for _,alternateName in module.alternateNames do
+				commandModuleList[alternateName] = commandModuleList[moduleInstance.Name]
+			end
+		end
+	end
+end
+
+return ChatCommandInterface]]></ProtectedString>
+					<string name="ScriptGuid">{B1A4EC58-C5D4-4AE8-84A3-414AA96776CC}</string>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">ChatCommandInterface</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+				<Item class="ModuleScript" referent="RBX370169BAB45940219EC6ACECD933CC2E">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- // Sends private messages between two players.
+
+local Players = game:GetService("Players")
+
+local Chat = game:GetService("Chat")
+local Shared = Chat:WaitForChild("Shared")
+local ChatUtil = require(Shared:WaitForChild("ChatUtil"))
+
+local ChatScript = script.Parent.Parent
+local MessageMode = require(ChatScript.ChatInterface.MessageMode)
+local WhisperInterface = require(ChatScript.WhisperInterface)
+local CurrentChannel = require(ChatScript.ChatInterface.CurrentChannel)
+
+local localPlayer = Players.LocalPlayer
+
+local whisper = {}
+
+whisper.alternateNames = {"w"}
+
+local targetPlayer: Player? = nil
+
+function whisper.onSending(message: string): (boolean, boolean)
+	local messageModeProperties = MessageMode.get()
+	if messageModeProperties == nil then
+		ChatUtil.debugPrint("No MessageMode")
+		return false, false
+	end
+	if messageModeProperties.metadata == nil then
+		ChatUtil.debugPrint("No metadata")
+		return false, false
+	end
+	
+	local commandName, targetPlayerName = ChatUtil.getCommandInfoFromMetadata(messageModeProperties.metadata)
+	if commandName == nil then
+		ChatUtil.debugPrint(`Metadata improperly formatted: {messageModeProperties.metadata}`)
+		return false, false
+	end
+	
+	local targetPlayer = Players:FindFirstChild(targetPlayerName)
+	if targetPlayer == nil then
+		ChatUtil.debugPrint("Target player does not exist")
+		return false, false
+	end
+	
+	local whisperChannel = WhisperInterface.getWhisperChannelAsync(targetPlayer)
+	CurrentChannel.setOnlyForNextMessage(whisperChannel.Name)
+	
+	-- Send message, don't fire remote
+	return false, true
+end
+
+function whisper.shouldEnableMessageMode(message: string): (boolean, string, string, Color3, string?)
+	local targetPlayer, _failureReason = ChatUtil.getPlayerFromTextQuery(Players.LocalPlayer, ChatUtil.removeCommandFromMessage(message))
+	if targetPlayer ~= nil and targetPlayer ~= localPlayer then
+		return true, `whisper`, `To {targetPlayer.Name}`, Color3.fromRGB(102, 14, 102), "whisper:" .. targetPlayer.Name
+	else
+		return false, nil, nil, nil, nil
+	end
+end
+
+return whisper]]></ProtectedString>
+						<string name="ScriptGuid">{41BB9209-6169-4D52-8EC0-D04F544EB7B2}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<string name="Name">whisper</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBXFEE4454BDAAB49559C3C69171F198277">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- // The basic template for commands on the client. Meant to be used as a reference; should not actually be run.
+
+local template = {}
+
+template.alternateNames = {"temp"} -- Alternate names can be typed in place of the full command name.
+
+function template.onSending(message: string): (boolean, boolean)
+	-- Run when command is typed out into the chat bar and enter is pressed.
+	return
+		true, -- If false, client will not ask the server to execute this command.
+		false -- If false, client will not send this message through the chat system.
+end
+
+function template.shouldEnableMessageMode(message: string): (boolean, string, string, Color3, any)
+	-- Run when the player types anything in the chat bar after the command prefix and there is no message mode currently active.
+	-- This function can be nil if this command does not need a message mode.
+	return
+		true, -- Whether the message mode should be enabled.
+		"template", -- The name of the message mode.
+		`Template`, -- The display text for the message mode label; appears in the chat bar.
+		Color3.fromRGB(102, 14, 102), -- The color of the message mode label.
+		"Hello, world!" -- Optional metadata to be sent alongside the chat message.
+end
+
+return template]]></ProtectedString>
+						<string name="ScriptGuid">{B8CB0403-46D2-4CA7-99D1-C880B1F9F474}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<string name="Name">template</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX24AFD76B1F15482387D16944D89BAED2">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- // Sends messages only to members of the player's team.
+
+local Players = game:GetService("Players")
+
+local Chat = game:GetService("Chat")
+local Shared = Chat:WaitForChild("Shared")
+local ChatUtil = require(Shared:WaitForChild("ChatUtil"))
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+
+local ChatScript = script.Parent.Parent
+local CurrentChannel = require(ChatScript.ChatInterface.CurrentChannel)
+
+local localPlayer = Players.LocalPlayer
+
+local team = {}
+
+function team.onSending(message: string): (boolean, boolean)
+	if localPlayer.Team ~= nil then
+		CurrentChannel.setOnlyForNextMessage("RBXTeam" .. localPlayer.TeamColor.Name)
+	end
+	return false, true
+end
+
+function team.shouldEnableMessageMode(message: string): (boolean, string, string, Color3, string?)
+	if localPlayer.Team ~= nil then
+		return true, "team", "Team", localPlayer.TeamColor.Color, nil
+	else
+		return false, nil, nil, nil, nil
+	end
+end
+
+return team]]></ProtectedString>
+						<string name="ScriptGuid">{DB349F65-5368-497D-9231-BEA8AD48399E}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<string name="Name">team</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBXF5C7CFE7D1D14ED1B4DE2E7C92877678">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- // Displays a list of all available commands in chat.
+
+local Chat = game:GetService("Chat")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+local ChatUtil = require(Shared:WaitForChild("ChatUtil"))
+
+local ChatScript = script.Parent.Parent
+local SystemMessages = require(ChatScript.ChatInterface.SystemMessages)
+
+local help = {}
+
+help.alternateNames = {"?"}
+
+function help.onSending(message: string): (boolean, boolean)
+	local systemMessage = ChatConstants.SystemMessages.CommandHelp.Intro
+	
+	local availableCommandList: {string} = {}
+	for _,v in script.Parent:GetChildren() do
+		if v.Name ~= "template" and table.find(ChatConstants.BlacklistedCommands, v.Name) == nil then
+			table.insert(availableCommandList, v.Name)
+		end
+	end
+	
+	table.sort(availableCommandList)
+	
+	for _,commandName in availableCommandList do
+		local commandDescription = ChatConstants.SystemMessages.CommandHelp[commandName]
+		if commandDescription ~= nil then
+			commandDescription = string.format(commandDescription, ChatConstants.CommandPrefix, ChatConstants.CommandPrefix)
+			systemMessage = systemMessage .. "\n" .. commandDescription
+		else
+			warn(`No description for command: {commandName}`)
+		end
+	end
+	
+	systemMessage = ChatUtil.sanitizeMessageForRichText(systemMessage)
+	SystemMessages.displaySystemMessage(systemMessage)
+	
+	-- We're already done, don't send anything else
+	return false, false
+end
+
+return help]]></ProtectedString>
+						<string name="ScriptGuid">{C030A3B2-EC09-4629-B481-C092D6B87925}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<string name="Name">help</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX33F6073DE7F44ABD8E77BEA1145B47F2">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- // Adds a player to a list to ignore messages from.
+
+local Chat = game:GetService("Chat")
+local Players = game:GetService("Players")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+local ChatUtil = require(Shared:WaitForChild("ChatUtil"))
+
+local ChatScript = script.Parent.Parent
+local SystemMessages = require(ChatScript.ChatInterface.SystemMessages)
+local MutedPlayers = require(ChatScript.MutedPlayers)
+
+local localPlayer = Players.LocalPlayer
+
+local mute = {}
+
+function mute.onSending(message: string): (boolean, boolean)
+	local commandInfo = ChatUtil.getCommandInfoFromMessage(message)
+	local playerQuery = commandInfo.arguments[1]
+	
+	local resultMessage: string = nil
+	local resultColor: Color3 = nil
+	
+	local player, failureReason = ChatUtil.getPlayerFromTextQuery(localPlayer, playerQuery)
+	if player ~= nil then
+		local success, message = MutedPlayers.mute(player)
+		if success then
+			resultColor = ChatConstants.GuiColors.Text
+		else
+			resultColor = ChatConstants.GuiColors.ErrorText
+		end
+		resultMessage = message
+	else
+		if failureReason == "EMPTY_QUERY" then
+			resultMessage = "Please specify a player."
+		elseif failureReason == "TOO_MANY_RESULTS" then
+			resultMessage = `More than one match found for "{player.Name}". Please type out more of the username.`
+		elseif failureReason == "NO_RESULTS" then
+			resultMessage = "No players found. Double check your spelling."
+		end
+		resultColor = ChatConstants.GuiColors.ErrorText
+	end
+	
+	SystemMessages.displaySystemMessage(`<font color="#{resultColor:ToHex()}">{resultMessage}</font>`)
+	
+	return false, false
+end
+
+return mute]]></ProtectedString>
+						<string name="ScriptGuid">{611A74D0-FB7D-4BB2-9B2A-F304BE7CC280}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<string name="Name">mute</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX364C7EB030094B6D9F3DDE704751F621">
+					<Properties>
+						<Content name="LinkedSource"><null></null></Content>
+						<ProtectedString name="Source"><![CDATA[-- // Adds a player to a list to ignore messages from.
+
+local Chat = game:GetService("Chat")
+local Players = game:GetService("Players")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+local ChatUtil = require(Shared:WaitForChild("ChatUtil"))
+
+local ChatScript = script.Parent.Parent
+local SystemMessages = require(ChatScript.ChatInterface.SystemMessages)
+local MutedPlayers = require(ChatScript.MutedPlayers)
+
+local localPlayer = Players.LocalPlayer
+
+local unmute = {}
+
+function unmute.onSending(message: string): (boolean, boolean)
+	local commandInfo = ChatUtil.getCommandInfoFromMessage(message)
+	local playerQuery = commandInfo.arguments[1]
+	
+	local resultMessage: string = nil
+	local resultColor: Color3 = nil
+	
+	local player, failureReason = ChatUtil.getPlayerFromTextQuery(localPlayer, playerQuery)
+	if player ~= nil then
+		local success, message = MutedPlayers.unmute(player)
+		if success then
+			resultColor = ChatConstants.GuiColors.Text
+		else
+			resultColor = ChatConstants.GuiColors.ErrorText
+		end
+		resultMessage = message
+	else
+		if failureReason == "EMPTY_QUERY" then
+			resultMessage = "Please specify a player."
+		elseif failureReason == "TOO_MANY_RESULTS" then
+			resultMessage = `More than one match found for "{player.Name}". Please type out more of the username.`
+		elseif failureReason == "NO_RESULTS" then
+			resultMessage = "No players found. Double check your spelling."
+		end
+		resultColor = ChatConstants.GuiColors.ErrorText
+	end
+	
+	SystemMessages.displaySystemMessage(`<font color="#{resultColor:ToHex()}">{resultMessage}</font>`)
+	
+	return false, false
+end
+
+return unmute]]></ProtectedString>
+						<string name="ScriptGuid">{0D6281B1-6354-4402-8CBE-B59034F61E97}</string>
+						<BinaryString name="AttributesSerialize"></BinaryString>
+						<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+						<bool name="DefinesCapabilities">false</bool>
+						<string name="Name">unmute</string>
+						<int64 name="SourceAssetId">-1</int64>
+						<BinaryString name="Tags"></BinaryString>
+					</Properties>
+				</Item>
+			</Item>
+			<Item class="ModuleScript" referent="RBXB1686B25DE0A40309E1F811EFD9C3AE7">
+				<Properties>
+					<Content name="LinkedSource"><null></null></Content>
+					<ProtectedString name="Source"><![CDATA[-- // Interface for getting and caching whisper channels.
+
+local TextChatService = game:GetService("TextChatService")
+local Players = game:GetService("Players")
+local Chat = game:GetService("Chat")
+
+local TextChannels = TextChatService:WaitForChild("TextChannels")
+local localPlayer = Players.LocalPlayer
+local Remotes = Chat:WaitForChild("Remotes")
+
+local WhisperInterface = {}
+
+local cachedChannels: {[Player]: TextChannel?} = {}
+
+function WhisperInterface.getWhisperChannelAsync(targetPlayer: Player): TextChannel?
+	local cachedTextChannel = cachedChannels[targetPlayer]
+	if cachedTextChannel ~= nil then
+		return cachedTextChannel
+	else
+		local textChannel = Remotes.GetWhisperChannel:InvokeServer(targetPlayer)
+		if textChannel ~= nil then
+			cachedChannels[targetPlayer] = textChannel
+		end
+		return textChannel
+	end
+end
+
+function WhisperInterface.init()
+	TextChannels.ChildAdded:Connect(function(textChannel: TextChannel)
+		if string.sub(textChannel.Name, 1, 7) == "Whisper" then
+			local split = string.split(textChannel.Name, "/")
+			local playerName1 = split[2]
+			local playerName2 = split[3]
+
+			local otherPlayer
+			if playerName1 == localPlayer.Name then
+				otherPlayer = Players[playerName2]
+			elseif playerName2 == localPlayer.Name then
+				otherPlayer = Players[playerName1]
+			end
+
+			if otherPlayer ~= nil then
+				cachedChannels[otherPlayer] = textChannel
+			end
+		end
+	end)
+	
+	TextChannels.ChildRemoved:Connect(function(textChannel: TextChannel)
+		for otherPlayer,cachedTextChannel in cachedChannels do
+			if textChannel == cachedTextChannel then
+				cachedChannels[otherPlayer] = nil
+			end
+		end
+	end)
+end
+
+return WhisperInterface]]></ProtectedString>
+					<string name="ScriptGuid">{66EB6390-30CE-4765-9D9A-1357FE5BA5B8}</string>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">WhisperInterface</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+			</Item>
+			<Item class="ModuleScript" referent="RBX8B79C63E90D340D3A8D801C808FA5298">
+				<Properties>
+					<Content name="LinkedSource"><null></null></Content>
+					<ProtectedString name="Source"><![CDATA[-- // Keeps track of other players who this player has muted.
+
+local Players = game:GetService("Players")
+
+local localPlayer = Players.LocalPlayer
+
+local MutedPlayers = {}
+
+local mutedPlayers: {[Player]: boolean?} = {}
+
+local playerMutedBindable = Instance.new("BindableEvent")
+playerMutedBindable.Name = "PlayerMuted"
+local playerUnmutedBindable = Instance.new("BindableEvent")
+playerUnmutedBindable.Name = "PlayerUnmuted"
+
+function MutedPlayers.isMuted(player: Player): boolean
+	return mutedPlayers[player] == true
+end
+
+function MutedPlayers.mute(player: Player): (boolean, string)
+	if player == localPlayer then
+		return false, "You can't mute yourself."
+	end
+	
+	if mutedPlayers[player] then
+		return false, `{player.Name} is already muted.`
+	end
+	mutedPlayers[player] = true
+	return true, `Muted {player.Name}.`
+end
+
+function MutedPlayers.unmute(player: Player)
+	if player == localPlayer then
+		return false, "You can't mute yourself."
+	end
+	
+	if not mutedPlayers[player] then
+		return false, `{player.Name} is already unmuted.`
+	end
+	mutedPlayers[player] = nil
+	return true, `Unmuted {player.Name}.`
+end
+
+function MutedPlayers.getPlayerMutedBindable()
+	return playerMutedBindable
+end
+
+function MutedPlayers.getPlayerUnmutedBindable()
+	return playerUnmutedBindable
+end
+
+function MutedPlayers.init()
+	Players.PlayerRemoving:Connect(function(player)
+		if mutedPlayers[player] ~= nil then
+			mutedPlayers[player] = nil
+		end
+	end)
+end
+
+return MutedPlayers]]></ProtectedString>
+					<string name="ScriptGuid">{0D5070F0-7361-4347-8460-E8B4D3D8E057}</string>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">MutedPlayers</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+			</Item>
+			<Item class="ModuleScript" referent="RBXFBC1B3BC6B254AAE94CE529278CF589B">
+				<Properties>
+					<Content name="LinkedSource"><null></null></Content>
+					<ProtectedString name="Source"><![CDATA[-- // Renders and animates chat bubbles.
+
+-- Some of this code is ripped from the original BubbleChat script.
+
+local Players = game:GetService("Players")
+local TextService = game:GetService("TextService")
+local Debris = game:GetService("Debris")
+local TweenService = game:GetService("TweenService")
+local Chat = game:GetService("Chat")
+
+local Shared = Chat:WaitForChild("Shared")
+local ChatUtil = require(Shared:WaitForChild("ChatUtil"))
+local ChatConstants = require(Shared:WaitForChild("ChatConstants"))
+
+local MAX_BUBBLE_WIDTH = 400
+
+local MAX_TOTAL_BUBBLE_HEIGHT = 150
+
+local NEAR_BUBBLE_DISTANCE = 45
+local MAX_BUBBLE_DISTANCE = 80
+
+local MIN_BUBBLE_LIFETIME = 12
+local MAX_BUBBLE_LIFETIME = 20
+
+local MIN_BUBBLE_LIFETIME_SELF = 8
+local MAX_BUBBLE_LIFETIME_SELF = 15
+
+local BUBBLE_FADE_TIME = 1.5
+
+local function getMessageLength(message: string): number
+	return utf8.len(utf8.nfcnormalize(message)) or 0
+end
+
+local ELLIPSES = "..."
+local MaxChatMessageLength = 128 -- max chat message length, including null terminator and ellipses.
+local MaxChatMessageLengthExclusive = MaxChatMessageLength - getMessageLength(ELLIPSES) - 1
+
+local ChatScript = script.Parent
+local MessageLog = require(ChatScript.ChatInterface.MessageLog)
+
+local localPlayer = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+local resizeBubbleTweenInfo = TweenInfo.new(.1, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local shiftBubblesUpTweenInfo = TweenInfo.new(.07, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+
+local BubbleChat = {}
+
+local chatBubbleQueues: {[PVInstance]: {BillboardGui}} = {} -- Most recent goes in front.
+
+local function sanitizeChatLine(msg)
+	if getMessageLength(msg) > MaxChatMessageLengthExclusive then
+		local byteOffset = (utf8.offset(msg, MaxChatMessageLengthExclusive + getMessageLength(ELLIPSES) + 1) or 1) - 1
+		return string.sub(msg, 1, byteOffset)
+	else
+		return msg
+	end
+end
+
+local function lerpLength(msg: string, min: number, max: number): number
+	return min + (max - min) * math.min(getMessageLength(msg) / 75.0, 1.0)
+end
+
+local function removeOldestFromQueue(adornee: PVInstance)
+	local queue = chatBubbleQueues[adornee]
+	if queue == nil then
+		return
+	end
+
+	local oldestBubble = queue[#queue]
+	if oldestBubble == nil then
+		return
+	end
+
+	oldestBubble:Destroy()
+	queue[#queue] = nil
+	-- ChatUtil.debugPrint(queue)
+end
+
+local function addBubbleToQueue(adornee: PVInstance, chatBubble: BillboardGui, lifetime: number)
+	local queue = chatBubbleQueues[adornee]
+	if queue == nil then
+		queue = {}
+		chatBubbleQueues[adornee] = queue
+
+		adornee.Destroying:Connect(function()
+			chatBubbleQueues[adornee] = nil
+		end)
+	end
+
+	local gap = 4
+	local newChatBubbleSizeY = chatBubble.BillboardFrame.ChatBubble.AbsoluteSize.Y
+	local totalYSpaceUsed = newChatBubbleSizeY
+	for _,v in queue do
+		if v.Parent == nil then
+			continue
+		end
+
+		-- Shift all bubbles upwards to make space
+		local shiftUp = newChatBubbleSizeY+gap
+		local newPosition = v.BillboardFrame.Position - UDim2.fromOffset(0, shiftUp)
+		TweenService:Create(v.BillboardFrame, shiftBubblesUpTweenInfo, {Position = newPosition}):Play()
+		totalYSpaceUsed += v.BillboardFrame.ChatBubble.AbsoluteSize.Y
+
+		-- Grey out text
+		v.BillboardFrame.ChatBubble.BubbleText.TextTransparency = 0.5
+	end
+	if totalYSpaceUsed > MAX_TOTAL_BUBBLE_HEIGHT then
+		removeOldestFromQueue(adornee)
+	end
+
+	table.insert(queue, 1, chatBubble)
+	-- ChatUtil.debugPrint(queue)
+
+	task.delay(lifetime+BUBBLE_FADE_TIME, function()
+		if chatBubble.Parent ~= nil then -- Need to first check to make sure this hasn't already been destroyed
+			removeOldestFromQueue(adornee)
+		end
+	end)
+end
+
+function BubbleChat.createBubbleFromTextChatMessage(textChatMessage: TextChatMessage)
+	local textSource = textChatMessage.TextSource
+	if textSource == nil then
+		-- System messages have no physical source
+		return
+	end
+
+	local adornee: PVInstance
+
+	local player = Players:GetPlayerByUserId(textSource.UserId)
+	local character = player.Character
+	if character == nil then
+		return
+	end
+
+	adornee = character:FindFirstChild("Head")
+	if adornee == nil then
+		adornee = character
+	end
+
+	BubbleChat.createBubble(adornee, textChatMessage.Text, player == localPlayer)
+end
+
+function BubbleChat.createBubble(adornee: PVInstance, message: string, sentBySelf: boolean?)
+	-- Create chat bubble gui
+	local chatBubbleGui = Instance.new("BillboardGui")
+	chatBubbleGui.Name = "ChatBubbleGui"
+	chatBubbleGui.Size = UDim2.fromOffset(400, 250)
+
+	local billboardFrame = Instance.new("Frame")
+	billboardFrame.Name = "BillboardFrame"
+	billboardFrame.AnchorPoint = Vector2.new(0.5, 0)
+	billboardFrame.BackgroundTransparency = 1
+	billboardFrame.Position = UDim2.fromScale(0.5, -0.5)
+	billboardFrame.Size = UDim2.fromScale(1, 1)
+
+	local smallTalkBubble = Instance.new("ImageLabel")
+	smallTalkBubble.Name = "SmallTalkBubble"
+	smallTalkBubble.AnchorPoint = Vector2.new(0.5, 1)
+	smallTalkBubble.BackgroundTransparency = 1
+	smallTalkBubble.BorderSizePixel = 0
+	smallTalkBubble.Image = "rbxasset://textures/ui/dialog_white.png"
+	smallTalkBubble.ImageColor3 = ChatConstants.GuiColors.BubbleBackground
+	smallTalkBubble.Position = UDim2.fromScale(0.5, 1)
+	smallTalkBubble.ScaleType = Enum.ScaleType.Slice
+	smallTalkBubble.Size = UDim2.fromOffset(40, 30)
+	smallTalkBubble.SliceCenter = Rect.new(5, 5, 15, 15)
+	smallTalkBubble.Visible = false
+
+	local smallTalkBubbleText = Instance.new("TextLabel")
+	smallTalkBubbleText.Name = "BubbleText"
+	smallTalkBubbleText.BackgroundTransparency = 1
+	smallTalkBubbleText.ClipsDescendants = true
+	smallTalkBubbleText.Font = ChatConstants.BubbleFont
+	smallTalkBubbleText.Size = UDim2.fromScale(1, 1)
+	smallTalkBubbleText.Text = "..."
+	smallTalkBubbleText.TextColor3 = ChatConstants.GuiColors.BubbleText
+	smallTalkBubbleText.TextSize = ChatConstants.BubbleTextSize
+
+	local smallTalkBubbleUIPadding = Instance.new("UIPadding")
+	smallTalkBubbleUIPadding.Name = "UIPadding"
+	smallTalkBubbleUIPadding.PaddingBottom = UDim.new(0, 12)
+	smallTalkBubbleUIPadding.PaddingLeft = UDim.new(0, 12)
+	smallTalkBubbleUIPadding.PaddingRight = UDim.new(0, 12)
+	smallTalkBubbleUIPadding.PaddingTop = UDim.new(0, 12)
+	smallTalkBubbleUIPadding.Parent = smallTalkBubbleText
+
+	smallTalkBubbleText.Parent = smallTalkBubble
+
+	local chatBubbleTailFrame = Instance.new("Frame")
+	chatBubbleTailFrame.Name = "ChatBubbleTailFrame"
+	chatBubbleTailFrame.BackgroundTransparency = 1
+	chatBubbleTailFrame.Position = UDim2.fromScale(0.5, 1)
+	chatBubbleTailFrame.Size = UDim2.fromScale(0.5, 0.5)
+	chatBubbleTailFrame.SizeConstraint = Enum.SizeConstraint.RelativeXX
+
+	local chatBubbleTail = Instance.new("ImageLabel")
+	chatBubbleTail.Name = "ChatBubbleTail"
+	chatBubbleTail.BackgroundTransparency = 1
+	chatBubbleTail.BorderSizePixel = 0
+	chatBubbleTail.Image = "rbxasset://textures/ui/dialog_tail.png"
+	chatBubbleTail.ImageColor3 = ChatConstants.GuiColors.BubbleBackground
+	chatBubbleTail.Position = UDim2.fromScale(-0.5, 0)
+	chatBubbleTail.Size = UDim2.fromScale(1, 0.5)
+	chatBubbleTail.Parent = chatBubbleTailFrame
+
+	chatBubbleTailFrame.Parent = smallTalkBubble
+
+	smallTalkBubble.Parent = billboardFrame
+
+	local chatBubble = Instance.new("ImageLabel")
+	chatBubble.Name = "ChatBubble"
+	chatBubble.AnchorPoint = Vector2.new(0.5, 1)
+	chatBubble.BackgroundTransparency = 1
+	chatBubble.BorderSizePixel = 0
+	chatBubble.Image = "rbxasset://textures/ui/dialog_white.png"
+	chatBubble.ImageColor3 = ChatConstants.GuiColors.BubbleBackground
+	chatBubble.Position = UDim2.fromScale(0.5, 1)
+	chatBubble.ScaleType = Enum.ScaleType.Slice
+	chatBubble.SliceCenter = Rect.new(5, 5, 15, 15)
+	chatBubble.Visible = false
+
+	local bubbleText = Instance.new("TextLabel")
+	bubbleText.Name = "BubbleText"
+	bubbleText.BackgroundTransparency = 1
+	bubbleText.ClipsDescendants = true
+	bubbleText.Font = ChatConstants.BubbleFont
+	bubbleText.Size = UDim2.fromScale(1, 1)
+	bubbleText.Text = ""
+	bubbleText.TextColor3 = ChatConstants.GuiColors.BubbleText
+	bubbleText.TextSize = ChatConstants.BubbleTextSize
+	bubbleText.TextWrapped = true
+
+	local uiPadding = Instance.new("UIPadding")
+	uiPadding.Name = "UIPadding"
+	uiPadding.PaddingBottom = UDim.new(0, 12)
+	uiPadding.PaddingLeft = UDim.new(0, 12)
+	uiPadding.PaddingRight = UDim.new(0, 12)
+	uiPadding.PaddingTop = UDim.new(0, 12)
+	uiPadding.Parent = bubbleText
+
+	bubbleText.Parent = chatBubble
+
+	chatBubble.Parent = billboardFrame
+
+	local chatBubbleTail1 = Instance.new("ImageLabel")
+	chatBubbleTail1.Name = "ChatBubbleTail"
+	chatBubbleTail1.BackgroundTransparency = 1
+	chatBubbleTail1.BorderSizePixel = 0
+	chatBubbleTail1.Image = "rbxasset://textures/ui/dialog_tail.png"
+	chatBubbleTail1.ImageColor3 = ChatConstants.GuiColors.BubbleBackground
+	chatBubbleTail1.Position = UDim2.new(0.5, -14, 1, 0)
+	chatBubbleTail1.Size = UDim2.fromOffset(30, 14)
+	chatBubbleTail1.Visible = false
+	chatBubbleTail1.Parent = billboardFrame
+
+	billboardFrame.Parent = chatBubbleGui
+
+	------------------------------------
+	
+	message = ChatUtil.convertRichTextEscapeStrings(message)
+
+	local textSizeBounds = TextService:GetTextSize(message, bubbleText.TextSize, bubbleText.Font, Vector2.new(MAX_BUBBLE_WIDTH, math.huge))
+	local multiline = textSizeBounds.Y > bubbleText.TextSize
+	if not multiline then
+		-- Single-line messages have less vertical padding
+		uiPadding.PaddingTop = UDim.new(0, uiPadding.PaddingTop.Offset/2)
+		uiPadding.PaddingBottom = UDim.new(0, uiPadding.PaddingBottom.Offset/2)
+	end
+
+	local chatBubbleSize = UDim2.fromOffset(
+		textSizeBounds.X + uiPadding.PaddingLeft.Offset + uiPadding.PaddingRight.Offset + 1, -- Text size is JUST barely too small on mobile, for some reason
+		textSizeBounds.Y + uiPadding.PaddingTop.Offset + uiPadding.PaddingBottom.Offset
+	)
+
+	-- Start a little bigger than normal and animate to regular size
+	chatBubble.Size = UDim2.fromOffset(chatBubbleSize.X.Offset+10, chatBubbleSize.Y.Offset+10)
+
+	local resizeTween = TweenService:Create(chatBubble, resizeBubbleTweenInfo, {Size = chatBubbleSize})
+	resizeTween:Play()
+
+	task.delay(resizeBubbleTweenInfo.Time, function()
+		bubbleText.Text = message
+	end)
+
+	chatBubbleGui.Adornee = adornee
+	chatBubbleGui.Parent = adornee
+
+	local lifetime: number
+	if sentBySelf then
+		chatBubbleGui.StudsOffset = Vector3.new(0, 1.8, 0)
+		lifetime = lerpLength(bubbleText.Text, MIN_BUBBLE_LIFETIME_SELF, MAX_BUBBLE_LIFETIME_SELF)
+	else
+		chatBubbleGui.StudsOffset = Vector3.new(0, 2.4, 0)
+		lifetime = lerpLength(bubbleText.Text, MIN_BUBBLE_LIFETIME, MAX_BUBBLE_LIFETIME)
+	end
+	Debris:AddItem(chatBubbleGui, lifetime + BUBBLE_FADE_TIME + 0.1)
+
+	task.delay(lifetime, function()
+		local tweenInfo = TweenInfo.new(BUBBLE_FADE_TIME, Enum.EasingStyle.Linear)
+		for _,v in chatBubbleGui:GetDescendants() do
+			if v:IsA("ImageLabel") then
+				TweenService:Create(v, tweenInfo, {ImageTransparency = 1}):Play()
+			elseif v:IsA("TextLabel") then
+				TweenService:Create(v, tweenInfo, {TextTransparency = 1}):Play()
+			end
+		end
+	end)
+
+	addBubbleToQueue(adornee, chatBubbleGui, lifetime)
+end
+
+function BubbleChat.init()
+	MessageLog.registerMessageAddedCallback(BubbleChat.createBubbleFromTextChatMessage)
+
+	task.spawn(function()
+		while true do
+			task.wait()
+			for player,queue in chatBubbleQueues do
+				if #queue == 0 then 
+					continue
+				end
+
+				local mostRecentChatBubble = queue[1]
+
+				local adornee: PVInstance = mostRecentChatBubble.Adornee
+				local distanceFromAdornee = (camera.CFrame.Position - adornee:GetPivot().Position).Magnitude
+
+				for i=1,#queue do
+					local bubbleGui = queue[i]
+					if bubbleGui.Parent == nil then
+						continue
+					end
+					local billboardFrame = bubbleGui.BillboardFrame
+
+					if distanceFromAdornee < NEAR_BUBBLE_DISTANCE then
+						-- Display all
+						if i == 1 then
+							billboardFrame.ChatBubble.Visible = true
+							billboardFrame.ChatBubbleTail.Visible = true
+
+							billboardFrame.SmallTalkBubble.Visible = false
+
+							bubbleGui.Enabled = true
+						else
+							billboardFrame.ChatBubble.Visible = true
+							billboardFrame.ChatBubbleTail.Visible = false
+
+							billboardFrame.SmallTalkBubble.Visible = false
+
+							bubbleGui.Enabled = true
+						end
+					elseif distanceFromAdornee < MAX_BUBBLE_DISTANCE and i == 1 then
+						-- Hide all except the most recent bubble, which will be turned into a small talk bubble
+						billboardFrame.ChatBubble.Visible = false
+						billboardFrame.ChatBubbleTail.Visible = false
+
+						billboardFrame.SmallTalkBubble.Visible = true
+
+						bubbleGui.Enabled = true
+					else
+						-- Hide all
+						bubbleGui.Enabled = false
+					end
+				end
+			end
+		end
+	end)
+end
+
+return BubbleChat]]></ProtectedString>
+					<string name="ScriptGuid">{730BE152-B6A4-46EF-A31B-9FB4AED28975}</string>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">BubbleChat</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+			</Item>
+		</Item>
+		<Item class="Folder" referent="RBX74C11089FE304FF1957C6E17FDA6F92C">
+			<Properties>
+				<BinaryString name="AttributesSerialize"></BinaryString>
+				<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+				<bool name="DefinesCapabilities">false</bool>
+				<string name="Name">Shared</string>
+				<int64 name="SourceAssetId">-1</int64>
+				<BinaryString name="Tags"></BinaryString>
+			</Properties>
+			<Item class="ModuleScript" referent="RBXD6553E8DF7D44BD2BDDD5730BFBF9D75">
+				<Properties>
+					<Content name="LinkedSource"><null></null></Content>
+					<ProtectedString name="Source"><![CDATA[-- // Shared constants between the client and server.
+
+local TextChatService = game:GetService("TextChatService")
+
+local ChatConstants
+ChatConstants = {
+	-- Features
+	DefaultChatEnabled = true, -- If false, the chat window will not be created.
+	BubbleChatEnabled = true, -- If true, chat bubbles will appear when messages are sent.
+	
+	UseDisplayNames = false, -- If true, display names will be shown in chat instead of usernames.
+	WindowResizeable = true,
+	ShowWhenPlayerIsTyping = false, -- If true, a typing indicator will appear when a player types in the chat bar.
+	AllowBlankMessages = false, -- If true, players will be allowed to send messages that only consist of whitespaces.
+
+	BlacklistedCommands = {
+		-- Commands in this list will be disabled for all players.
+		"commandname1",
+		"commandname2",
+	},
+
+	-- Debug
+	Logging = false, -- If true, additional debug messages will be printed to the output.
+
+	-- Channels
+	DefaultChannel = "RBXGeneral",
+	SystemMessageChannel = "RBXSystem",
+
+	-- Hotkeys & prefixes
+	ChatKey = Enum.KeyCode.Slash,
+	CommandPrefix = "/",
+
+	-- Messages
+	SystemMessages = {
+		Welcome = {
+			General = `Chat '%s?' or '%shelp' for a list of chat commands.`,
+			Team = "This is a private channel between you and your team members.",
+		},
+
+		CommandHelp = {
+			-- All instances of "%s" will be replaced with the command prefix when displayed in the chat window.
+			Intro = "These are the basic chat commands.",
+
+			-- Index (word on the left side) must be identical to the command name.
+			help = "%shelp or %s? : view all available chat commands.",
+			whisper = "%swhisper <speaker> or %sw <speaker> : open private message channel with speaker.",
+			c = "%sc <channel> : switch channel menu tabs.",
+			join = "%sjoin <channel> or %sj <channel> : join channel.",
+			leave = "%sleave <channel> or %sl <channel> : leave channel. (leaves current if none specified)",
+			me = "%sme <text> : roleplaying command for doing actions.",
+			mute = "%smute <speaker> : mute a speaker.",
+			unmute = "%sunmute <speaker> : unmute a speaker.",
+			team = "%steam <message> or %st <message> : send a team chat to players on your team.",
+		},
+	},
+
+	-- GUIs
+	DefaultChatWindowSizeScale = Vector2.new(0.4, 0.33),
+
+	ChatWindowSizeBoundsPixels = {
+		Minimum = Vector2.new(200, 100),
+		Maximum = Vector2.new(1920, 1080),
+	},
+
+	GuiColors = {
+		Background = Color3.new(0, 0, 0),
+		TextBoxBackground = Color3.new(1, 1, 1),
+		TextBoxText = Color3.new(0, 0, 0),
+		Text = Color3.new(1, 1, 1),
+		ErrorText = Color3.fromRGB(245, 50, 50),
+
+		BubbleBackground = Color3.new(1, 1, 1),
+		BubbleText = Color3.new(0.105882, 0.164706, 0.207843),
+	},
+
+	DefaultUsernameColors = { -- The username colors a player can be assigned when they are not on a team.
+		Color3.new(253/255, 41/255, 67/255), -- BrickColor.new("Bright red").Color,
+		Color3.new(1/255, 162/255, 255/255), -- BrickColor.new("Bright blue").Color,
+		Color3.new(2/255, 184/255, 87/255), -- BrickColor.new("Earth green").Color,
+		BrickColor.new("Bright violet").Color,
+		BrickColor.new("Bright orange").Color,
+		BrickColor.new("Bright yellow").Color,
+		BrickColor.new("Light reddish violet").Color,
+		BrickColor.new("Brick yellow").Color,
+	},
+
+	-- Text
+	TextSize = 18,
+	["Font"] = Enum.Font.SourceSansBold,
+
+	BubbleTextSize = 24,
+	BubbleFont = Enum.Font.SourceSans,
+
+	MessageCharacterLimit = 200,
+	MessageLogLimit = 100,
+
+	PlayerSourceCasing = "[%s]:",
+	SystemSourceCasing = "{%s}",
+	MessageModeSourceCasing = "[%s]",
+	TagCasing = "[%s]",
+}
+
+table.freeze(ChatConstants)
+
+return ChatConstants]]></ProtectedString>
+					<string name="ScriptGuid">{B4ED3488-249A-44A8-97F2-70C5E2B2E4AD}</string>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">ChatConstants</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+			</Item>
+			<Item class="ModuleScript" referent="RBX06F3D047BE104CD69352C9E584040FD0">
+				<Properties>
+					<Content name="LinkedSource"><null></null></Content>
+					<ProtectedString name="Source"><![CDATA[-- // General-use functions for the chat system.
+
+local Players = game:GetService("Players")
+
+local ChatConstants = require(script.Parent.ChatConstants)
+
+local ChatUtil = {}
+
+function ChatUtil.debugPrint(...)
+	if ChatConstants.Logging then
+		print(...)
+	end
+end
+
+function ChatUtil.getPlayerFromTextQuery(sender: Player, query: string?): (Player?, string? | "TOO_MANY_RESULTS" | "NO_RESULTS" | "EMPTY_QUERY")
+	local allPlayers = Players:GetPlayers()
+	if #allPlayers == 2 then
+		-- There's only one other player; use them
+		for _,player in allPlayers do
+			if player ~= sender then
+				return player
+			end
+		end
+	end
+	
+	if query == nil then
+		return nil, "EMPTY_QUERY"
+	end
+	
+	local loweredQuery = query:lower()
+	
+	local partialUsernameMatches: {Player} = {}
+	local directDisplayNameMatches: {Player} = {}
+	local partialDisplayNameMatches: {Player} = {}
+	
+	for _,player in allPlayers do
+		local loweredUsername = player.Name:lower()
+		local loweredDisplayName = player.DisplayName:lower()
+		if loweredUsername == loweredQuery then
+			-- Direct username match; immediately return this
+			return player, nil
+		elseif loweredDisplayName == loweredQuery then
+			-- Direct display name match
+			table.insert(directDisplayNameMatches, player)
+		elseif string.sub(loweredUsername, 1, #loweredQuery) == loweredQuery then
+			-- Partial username match
+			table.insert(partialUsernameMatches, player)
+		elseif string.sub(loweredDisplayName, 1, #loweredQuery) == loweredQuery then
+			-- Partial username match
+			table.insert(partialUsernameMatches, player)
+		end
+	end
+	
+	if #partialUsernameMatches == 1 then
+		return partialUsernameMatches[1], nil
+	elseif #directDisplayNameMatches == 1 then
+		return directDisplayNameMatches[1], nil
+	elseif #partialDisplayNameMatches == 1 then
+		return partialDisplayNameMatches[1], nil
+	else
+		if #partialUsernameMatches > 1 or #directDisplayNameMatches > 1 or #partialDisplayNameMatches > 1 then
+			return nil, "TOO_MANY_RESULTS"
+		else
+			return nil, "NO_RESULTS"
+		end
+	end
+end
+
+function ChatUtil.removeCommandFromMessage(message: string)
+	local loweredMessage = message:lower()
+	local commandPrefix = ChatConstants.CommandPrefix
+	if string.sub(loweredMessage, 1, string.len(commandPrefix)) == commandPrefix then
+		-- Skip the prefix, then just go through the characters until there's a space
+		local commandEnd: number?
+		for i = string.len(commandPrefix)+1, string.len(message) do
+			local currentChar = string.sub(message, i, i)
+			if currentChar == " " then
+				commandEnd = i
+				break
+			end
+		end
+		if commandEnd == nil then
+			-- No space detected; player is not finished typing this command
+			return ""
+		end
+		return string.sub(message, commandEnd + 1)
+	else
+		-- Not a command message
+		return message
+	end
+end
+
+function ChatUtil.getCommandInfoFromMessage(message: string): {
+		rawCommandName: string?,
+		arguments: {string}
+	}
+	local loweredMessage = message:lower()
+	local commandPrefix = ChatConstants.CommandPrefix
+	if string.sub(loweredMessage, 1, string.len(commandPrefix)) == commandPrefix then
+		local split = string.split(string.sub(message, string.len(commandPrefix)+1), " ")
+		
+		local arguments = table.clone(split)
+		table.remove(arguments, 1)
+		
+		return {
+			rawCommandName = split[1],
+			arguments = arguments,
+		}
+	else
+		--[[
+			IMPORTANT REMINDER: No prefix doesn't necessarily mean this isn't a command!
+			Make sure to also check MessageMode, as that can replace the prefix and command name.
+		]]
+		local arguments = string.split(message, " ")
+		
+		return {
+			rawCommandName = nil,
+			arguments = arguments
+		}
+	end
+end
+
+function ChatUtil.getCommandInfoFromMetadata(metadata: string): (string?, string?)
+	local usingMetadataForCommand = false
+
+	local commandName = ""
+	for i=1, #metadata do
+		local character = string.sub(metadata, i, i)
+		if character == ":" then
+			usingMetadataForCommand = true
+			break
+		end
+		commandName = commandName .. character
+	end
+
+	if usingMetadataForCommand then
+		return commandName, string.sub(metadata, #commandName+2)
+	else
+		return nil, nil
+	end
+end
+
+local NAME_COLORS = ChatConstants.DefaultUsernameColors
+function ChatUtil.getDefaultUsernameColor(username: string): Color3
+	local value = 0
+	for index = 1, #username do
+		local cValue = string.byte(string.sub(username, index, index))
+		local reverseIndex = #username - index + 1
+		if #username%2 == 1 then
+			reverseIndex = reverseIndex - 1
+		end
+		if reverseIndex%4 >= 2 then
+			cValue = -cValue
+		end
+		value = value + cValue
+	end
+	
+	return NAME_COLORS[(value % #NAME_COLORS) + 1]
+end
+
+function ChatUtil.sanitizeMessageForRichText(message: string): string
+	message = string.gsub(message, "\&", "&amp;")
+	message = string.gsub(message, "<", "&lt;")
+	message = string.gsub(message, ">", "&gt;")
+	message = string.gsub(message, `"`, "&quot;")
+	message = string.gsub(message, `'`, "&apos;")
+
+	return message
+end
+
+function ChatUtil.removeRichTextTags(message: string): string
+	-- I just want to clarify that this regex is incomprehensible to me and this was written by code assist -steven
+	message = string.gsub(message, "</?[biu]>", "")
+	message = string.gsub(message, "</?font[^>]->", "")
+	message = string.gsub(message, "<[^>]->", "")
+
+	return message
+end
+
+function ChatUtil.convertRichTextEscapeStrings(message: string): string
+	message = string.gsub(message, "&lt;", "<")
+	message = string.gsub(message, "&gt;", ">")
+	message = string.gsub(message, "&quot;", `"`)
+	message = string.gsub(message, "&apos;", `'`)
+	message = string.gsub(message, "&amp;", "&")
+	
+	return message
+end
+
+function ChatUtil.checkIsBlankString(text: string): boolean
+	-- Checks if a string is either empty ("") or only whitespcae
+	return text:match("^%s*$") ~= nil
+end
+
+return ChatUtil]]></ProtectedString>
+					<string name="ScriptGuid">{095B0BC9-61C6-4052-863F-9A3558AA7C32}</string>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">ChatUtil</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+			</Item>
+		</Item>
+		<Item class="Folder" referent="RBXE7B4D79F1220461E986EBF9CDD72C64B">
+			<Properties>
+				<BinaryString name="AttributesSerialize"></BinaryString>
+				<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+				<bool name="DefinesCapabilities">false</bool>
+				<string name="Name">Remotes</string>
+				<int64 name="SourceAssetId">-1</int64>
+				<BinaryString name="Tags"></BinaryString>
+			</Properties>
+			<Item class="RemoteEvent" referent="RBX49D6FFFFDF1647279A7B14BC78DE0AB8">
+				<Properties>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">DisplaySystemMessage</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+			</Item>
+			<Item class="RemoteEvent" referent="RBXD2F1F1F86F4D49E0B14AB4DBD9C4B74B">
+				<Properties>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">RunChatCommand</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+			</Item>
+			<Item class="RemoteFunction" referent="RBXD41C24778A384D0B81547AF071F5E33A">
+				<Properties>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">GetWhisperChannel</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+			</Item>
+			<Item class="RemoteEvent" referent="RBX38DF8D30DF7A4A2D8F4740160073D36F">
+				<Properties>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">TypedInChatBar</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+			</Item>
+			<Item class="RemoteEvent" referent="RBX20CA9C057CE249E3BBAD8AD0B5F30DEB">
+				<Properties>
+					<BinaryString name="AttributesSerialize"></BinaryString>
+					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+					<bool name="DefinesCapabilities">false</bool>
+					<string name="Name">StoppedTypingInChatBar</string>
+					<int64 name="SourceAssetId">-1</int64>
+					<BinaryString name="Tags"></BinaryString>
+				</Properties>
+			</Item>
+		</Item>
+	</Item>
+</roblox>
