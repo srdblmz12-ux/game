@@ -1,0 +1,275 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+	<Meta name="ExplicitAutoJoints">true</Meta>
+	<External>null</External>
+	<External>nil</External>
+	<Item class="ModuleScript" referent="RBXE1556BC3D73E4A0E93791C8666659DCE">
+		<Properties>
+			<Content name="LinkedSource"><null></null></Content>
+			<ProtectedString name="Source"><![CDATA[local BetterAnalyticsService = {}
+
+local Config = require(script.Config)
+
+local DebugMode = Config.DebugMode
+
+local AnalyticsService = game:GetService("AnalyticsService")
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+
+local function matchType(value, expectedType)
+	local valueTypeOf = typeof(value)
+	
+	if valueTypeOf == expectedType then
+		return true
+	end
+	
+	return false, valueTypeOf
+end
+
+function BetterAnalyticsService:LogEconomyEvent(player: Player, flowType: string, 
+	currencyType: string, amount: number, endingBalance: number, 
+	transactionType: string, itemSku: string, customFields)
+	
+	if (not matchType(player, "Instance")) or (player.Parent ~= Players) then
+		warn("Player Instance is not valid")
+		return
+	end
+	
+	local success, flowTypeEnum = pcall(function()
+		return Enum.AnalyticsEconomyFlowType[flowType]
+	end)
+	
+	if not success then
+		local str = "%s is not a valid Transaction Type.\nRefer to https://create.roblox.com/docs/reference/engine/enums/AnalyticsEconomyFlowType for more information."
+		warn(string.format(str, flowType))
+		return
+	end
+	
+	local check, typeOf = matchType(currencyType, "string")
+	if not check then
+		local str = "Invalid argument #3 to 'LogEconomyEvent' (string expected, got %s)"
+		warn(string.format(str, typeOf))
+		return
+	end
+	
+	local check, typeOf = matchType(amount, "number")
+	if not check then
+		local str = "Invalid argument #4 to 'LogEconomyEvent' (number expected, got %s)"
+		warn(string.format(str, typeOf))
+		return
+	end
+	
+	local check, typeOf = matchType(endingBalance, "number")
+	if not check then
+		local str = "Invalid argument #5 to 'LogEconomyEvent' (number expected, got %s)"
+		warn(string.format(str, typeOf))
+		return
+	end
+	
+	local success, transactionTypeEnum = pcall(function()
+		return Enum.AnalyticsEconomyTransactionType[transactionType]
+	end)
+
+	if not success then
+		local str = "%s is not a valid Transaction Type.\nRefer to https://create.roblox.com/docs/reference/engine/enums/AnalyticsEconomyTransactionType for more information."
+		warn(string.format(str, transactionType))
+		return
+	end
+	
+	if itemSku ~= nil then
+		local check, typeOf = matchType(itemSku, "string")
+		if not check then
+			local str = "Invalid argument #7 to 'LogEconomyEvent' (string expected, got %s)"
+			warn(string.format(str, typeOf))
+			return
+		end
+	end
+	
+	local success, errorMessage = pcall(function()
+		AnalyticsService:LogEconomyEvent(player, flowTypeEnum, 
+			currencyType, amount, endingBalance, transactionTypeEnum.Name, 
+			itemSku, customFields)
+	end)
+	
+	if not success then
+		error(errorMessage)
+		return
+	end
+	
+	if DebugMode then
+		local args = {
+			player = player.UserId,
+			flowType = flowType,
+			currencyType = currencyType,
+			amount = amount,
+			endingBalance = endingBalance,
+			transactionType = transactionType,
+			itemSku = itemSku,
+			customFields = customFields,
+		}
+
+		print("Published the following data to Roblox using 'LogEconomyEvent':")
+		print(args)
+	end
+	
+	return errorMessage
+end
+
+function BetterAnalyticsService:LogFunnelStepEvent(player: Player, funnelName: string, 
+	funnelSessionId: string, step: number, stepName: string, customFields)
+	
+	if (not matchType(player, "Instance")) or (player.Parent ~= Players) then
+		warn("Player Instance is not valid")
+		return
+	end
+	
+	local check, typeOf = matchType(funnelName, "string")
+	if not check then
+		local str = "Invalid argument #2 to 'LogFunnelStepEvent' (string expected, got %s)"
+		warn(string.format(str, typeOf))
+		return
+	end
+	
+	if funnelSessionId ~= nil then
+		local check, typeOf = matchType(funnelSessionId, "string")
+		if not check then
+			local str = "Invalid argument #3 to 'LogFunnelStepEvent' (string expected, got %s):\nUsing HttpService:GenerateGUID() as fallback"
+			warn(string.format(str, typeOf))
+			funnelSessionId = HttpService:GenerateGUID()
+		end
+	else
+		funnelSessionId = HttpService:GenerateGUID()
+	end
+	
+	local check, typeOf = matchType(step, "number")
+	if not check then
+		local str = "Invalid argument #4 to 'LogFunnelStepEvent' (number expected, got %s)"
+		warn(string.format(str, typeOf))
+		return
+	end
+	
+	local check, typeOf = matchType(stepName, "string")
+	if not check then
+		local str = "Invalid argument #5 to 'LogFunnelStepEvent' (string expected, got %s)"
+		warn(string.format(str, typeOf))
+		return
+	end
+	
+	local success, errorMessage = pcall(function()
+		AnalyticsService:LogFunnelStepEvent(player, funnelName, funnelSessionId, step, stepName, customFields)
+	end)
+
+	if not success then
+		error(errorMessage)
+		return
+	end
+	
+	if DebugMode then
+		local args = {
+			player = player.UserId,
+			funnelName = funnelName,
+			funnelSessionId = funnelSessionId,
+			step = step,
+			stepName = stepName,
+			customFields = customFields,
+		}
+		
+		print("Published the following data to Roblox using 'LogFunnelStepEvent':")
+		print(args)
+	end
+
+	return errorMessage
+end
+
+function BetterAnalyticsService:LogOnboardingFunnelStepEvent(player: Player, 
+	step: number, stepName: string, customFields)
+	
+	if typeof(player) ~= "Instance" or player.Parent ~= Players then
+		warn("Player Instance is not valid")
+		return
+	end
+	
+	local check, typeOf = matchType(step, "number")
+	if not check then
+		local str = "Invalid argument #2 to 'LogFunnelStepEvent' (number expected, got %s)"
+		warn(string.format(str, typeOf))
+		return
+	end
+
+	local check, typeOf = matchType(stepName, "string")
+	if not check then
+		local str = "Invalid argument #3 to 'LogFunnelStepEvent' (string expected, got %s)"
+		warn(string.format(str, typeOf))
+		return
+	end
+	
+	local success, errorMessage = pcall(function()
+		AnalyticsService:LogOnboardingFunnelStepEvent(player, step, stepName, customFields)
+	end)
+
+	if not success then
+		error(errorMessage)
+		return
+	end
+	
+	if DebugMode then
+		local args = {
+			player = player.UserId,
+			step = step,
+			stepName = stepName,
+			customFields = customFields,
+		}
+
+		print("Published the following data to Roblox using 'LogOnboardingFunnelStepEvent':")
+		print(args)
+	end
+
+	return errorMessage
+end
+
+return BetterAnalyticsService]]></ProtectedString>
+			<string name="ScriptGuid">{8B1546BC-A678-442C-8F78-C61DF41195C8}</string>
+			<BinaryString name="AttributesSerialize"></BinaryString>
+			<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+			<bool name="DefinesCapabilities">false</bool>
+			<string name="Name">BetterAnalyticsService</string>
+			<int64 name="SourceAssetId">18422474297</int64>
+			<BinaryString name="Tags"></BinaryString>
+		</Properties>
+		<Item class="ModuleScript" referent="RBXC1C4148D623F48ABA47A2DA87E58DEA2">
+			<Properties>
+				<Content name="LinkedSource"><null></null></Content>
+				<ProtectedString name="Source"><![CDATA[local Config = {} -- This file must be parented to the main module (BetterAnalyticsService)
+
+Config.DebugMode = false
+
+return Config
+]]></ProtectedString>
+				<string name="ScriptGuid">{6AE44BED-988A-457B-BFA9-5C44C4F0EF8B}</string>
+				<BinaryString name="AttributesSerialize"></BinaryString>
+				<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+				<bool name="DefinesCapabilities">false</bool>
+				<string name="Name">Config</string>
+				<int64 name="SourceAssetId">-1</int64>
+				<BinaryString name="Tags"></BinaryString>
+			</Properties>
+		</Item>
+		<Item class="ModuleScript" referent="RBXB9F8AD6D296E4AE4B2BBC5F1E6ABE472">
+			<Properties>
+				<Content name="LinkedSource"><null></null></Content>
+				<ProtectedString name="Source"><![CDATA[-- BetterAnalyticsService is a wrapper for Roblox's AnalyticsService API
+-- Read more: https://devforum.roblox.com/t/betteranalyticsservice-an-analyticsservice-api-wrapper/3061659
+
+-- AnalyticsService: https://create.roblox.com/docs/reference/engine/classes/AnalyticsService
+-- Economy Flow Types: https://create.roblox.com/docs/reference/engine/enums/AnalyticsEconomyFlowType
+-- Economy Transaction Types: https://create.roblox.com/docs/reference/engine/enums/AnalyticsEconomyTransactionType]]></ProtectedString>
+				<string name="ScriptGuid">{39BD698A-0C02-4C53-8D99-3E8C798A513E}</string>
+				<BinaryString name="AttributesSerialize"></BinaryString>
+				<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+				<bool name="DefinesCapabilities">false</bool>
+				<string name="Name">ReadMe</string>
+				<int64 name="SourceAssetId">-1</int64>
+				<BinaryString name="Tags"></BinaryString>
+			</Properties>
+		</Item>
+	</Item>
+</roblox>
