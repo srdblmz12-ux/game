@@ -2,7 +2,7 @@
 	<Meta name="ExplicitAutoJoints">true</Meta>
 	<External>null</External>
 	<External>nil</External>
-	<Item class="ScreenGui" referent="RBXD81761D11F9E4DFCBDEE79C6CCB969D1">
+	<Item class="ScreenGui" referent="RBXA80D5A7303EC48DF97211E5AB136A028">
 		<Properties>
 			<bool name="ClipToDeviceSafeArea">true</bool>
 			<int name="DisplayOrder">0</int>

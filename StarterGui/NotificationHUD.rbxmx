@@ -2,7 +2,7 @@
 	<Meta name="ExplicitAutoJoints">true</Meta>
 	<External>null</External>
 	<External>nil</External>
-	<Item class="ScreenGui" referent="RBXEC0C6EA4811D42068D7722129B6F04F9">
+	<Item class="ScreenGui" referent="RBX1E6F5430AE264258972F5EC0014AC371">
 		<Properties>
 			<bool name="ClipToDeviceSafeArea">true</bool>
 			<int name="DisplayOrder">10</int>
@@ -25,7 +25,7 @@
 			<int64 name="SourceAssetId">-1</int64>
 			<BinaryString name="Tags"></BinaryString>
 		</Properties>
-		<Item class="UIListLayout" referent="RBX17EA98684B6C4F26A54148A03ADEC999">
+		<Item class="UIListLayout" referent="RBX8809F4E4C0D24424946E94E21DC93254">
 			<Properties>
 				<token name="HorizontalFlex">0</token>
 				<token name="ItemLineAlignment">0</token>
@@ -47,7 +47,7 @@
 				<BinaryString name="Tags"></BinaryString>
 			</Properties>
 		</Item>
-		<Item class="UIPadding" referent="RBXEDCABA39F28A4EC38946DC1AA5579CD0">
+		<Item class="UIPadding" referent="RBX5EA27799868E459BB8F5EC93C7E5E3FC">
 			<Properties>
 				<UDim name="PaddingBottom">
 					<S>0.150000006</S>

@@ -2,7 +2,7 @@
 	<Meta name="ExplicitAutoJoints">true</Meta>
 	<External>null</External>
 	<External>nil</External>
-	<Item class="ScreenGui" referent="RBX2C322561BEB540EABD311CEBE80E1555">
+	<Item class="ScreenGui" referent="RBX23EF9D627B974F2F9937177E531126DF">
 		<Properties>
 			<bool name="ClipToDeviceSafeArea">true</bool>
 			<int name="DisplayOrder">1</int>
@@ -25,7 +25,7 @@
 			<int64 name="SourceAssetId">-1</int64>
 			<BinaryString name="Tags"></BinaryString>
 		</Properties>
-		<Item class="Frame" referent="RBX346E6666FEF2499D89845EE293D8A582">
+		<Item class="Frame" referent="RBXD5024299366F4165978B914E8FC21DC0">
 			<Properties>
 				<token name="Style">0</token>
 				<bool name="Active">false</bool>
@@ -88,7 +88,7 @@
 				<int64 name="SourceAssetId">-1</int64>
 				<BinaryString name="Tags"></BinaryString>
 			</Properties>
-			<Item class="UIAspectRatioConstraint" referent="RBXCF30BCFEB1BB462083C7E9E43785F659">
+			<Item class="UIAspectRatioConstraint" referent="RBX5C6BE96BC7104EC6AC4493BF5CDAFB2E">
 				<Properties>
 					<float name="AspectRatio">1.42277992</float>
 					<token name="AspectType">0</token>
@@ -101,7 +101,7 @@
 					<BinaryString name="Tags"></BinaryString>
 				</Properties>
 			</Item>
-			<Item class="UIStroke" referent="RBX19DF18B91281483DBDCAA18C3B4C4E98">
+			<Item class="UIStroke" referent="RBXEC34D7D06082498D8C69124FD822EB16">
 				<Properties>
 					<token name="ApplyStrokeMode">0</token>
 					<UDim name="BorderOffset">
@@ -128,7 +128,7 @@
 					<BinaryString name="Tags"></BinaryString>
 				</Properties>
 			</Item>
-			<Item class="Folder" referent="RBXBBD7DDD1188C4D44AFAA0EE10C332618">
+			<Item class="Folder" referent="RBXD7824BD1650A402E8DA8B8C6E5EA9823">
 				<Properties>
 					<BinaryString name="AttributesSerialize"></BinaryString>
 					<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
@@ -138,7 +138,7 @@
 					<BinaryString name="Tags"></BinaryString>
 				</Properties>
 			</Item>
-			<Item class="ScrollingFrame" referent="RBXC29DDF60D9554955843323E66D7DB7F1">
+			<Item class="ScrollingFrame" referent="RBX0A9CF32A16A54AE99D7FB4D88CE036BE">
 				<Properties>
 					<token name="AutomaticCanvasSize">2</token>
 					<Content name="BottomImage"><url>rbxasset://textures/ui/Scroll/scroll-bottom.png</url></Content>
@@ -227,7 +227,7 @@
 					<int64 name="SourceAssetId">-1</int64>
 					<BinaryString name="Tags"></BinaryString>
 				</Properties>
-				<Item class="UIListLayout" referent="RBX2BB852D5B4664CB4B0DA3CFCAC6B0BB2">
+				<Item class="UIListLayout" referent="RBX2BC7573D2AA4476B9B291E1E024A3189">
 					<Properties>
 						<token name="HorizontalFlex">0</token>
 						<token name="ItemLineAlignment">0</token>
@@ -249,7 +249,7 @@
 						<BinaryString name="Tags"></BinaryString>
 					</Properties>
 				</Item>
-				<Item class="UIPadding" referent="RBXE84FF49382B4467B9FDCE0A2CB416EBB">
+				<Item class="UIPadding" referent="RBX60B344CEAAA446AE8CAA84073173B6E9">
 					<Properties>
 						<UDim name="PaddingBottom">
 							<S>0</S>

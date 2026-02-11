@@ -2,7 +2,7 @@
 	<Meta name="ExplicitAutoJoints">true</Meta>
 	<External>null</External>
 	<External>nil</External>
-	<Item class="ScreenGui" referent="RBX3B1375D095704FE5AF446C99CA5EF46B">
+	<Item class="ScreenGui" referent="RBX11E4C69BCE6B490DA2D76E67BFBEDDB7">
 		<Properties>
 			<bool name="ClipToDeviceSafeArea">true</bool>
 			<int name="DisplayOrder">5</int>
@@ -25,7 +25,7 @@
 			<int64 name="SourceAssetId">-1</int64>
 			<BinaryString name="Tags"></BinaryString>
 		</Properties>
-		<Item class="Frame" referent="RBX102EE7AC1D8B45C096A4BB2DBA9701DA">
+		<Item class="Frame" referent="RBXFC16A69DCDBC4031913369E288E36AC3">
 			<Properties>
 				<token name="Style">0</token>
 				<bool name="Active">false</bool>
@@ -88,7 +88,7 @@
 				<int64 name="SourceAssetId">-1</int64>
 				<BinaryString name="Tags"></BinaryString>
 			</Properties>
-			<Item class="TextLabel" referent="RBXB68D2BA3D03D4E4BAA363792F879F9FA">
+			<Item class="TextLabel" referent="RBXBA46C7226157460E9016B267EEEA9977">
 				<Properties>
 					<Font name="FontFace">
 						<Family><url>rbxasset://fonts/families/ComicNeueAngular.json</url></Family>
@@ -181,7 +181,7 @@
 					<int64 name="SourceAssetId">-1</int64>
 					<BinaryString name="Tags"></BinaryString>
 				</Properties>
-				<Item class="UIStroke" referent="RBX5AC96408870E40C9A9DA484DC050F55D">
+				<Item class="UIStroke" referent="RBX92C02D30C2FF4829A35D3D4626B4DBF9">
 					<Properties>
 						<token name="ApplyStrokeMode">1</token>
 						<UDim name="BorderOffset">
@@ -208,7 +208,7 @@
 						<BinaryString name="Tags"></BinaryString>
 					</Properties>
 				</Item>
-				<Item class="UIStroke" referent="RBX0C380EE5C6ED4B028CEE5612E73BC038">
+				<Item class="UIStroke" referent="RBX3518EC4CD2D7416A8A1B0D3318FCA948">
 					<Properties>
 						<token name="ApplyStrokeMode">0</token>
 						<UDim name="BorderOffset">
@@ -236,7 +236,7 @@
 					</Properties>
 				</Item>
 			</Item>
-			<Item class="Frame" referent="RBXA117E415149740428EDF183DFED9E285">
+			<Item class="Frame" referent="RBXAEE96613F57A4584889BFC12057E490A">
 				<Properties>
 					<token name="Style">0</token>
 					<bool name="Active">false</bool>
