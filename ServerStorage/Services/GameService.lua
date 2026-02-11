@@ -1,997 +1,518 @@
---[[
-    GameService.lua - BULLETPROOF VERSION (FIXED VOTING BUG)
-    
-    GÜNCELLEMELER:
-    1. Fix: Oylama sırasında oyuncu çıkarsa ekranın takılı kalması sorunu çözüldü (ResetMatch içine Force Clear eklendi).
-    2. Fix: OnStart döngüsünde hata anında önce Reset atılıyor, sonra bekleniyor (Anlık UI temizliği).
-    3. Genel: Kod yapısı korundu, gereksiz tablolar kaldırıldı.
-]]
-
 -- Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 local Players = game:GetService("Players")
-local AnalyticsService = game:GetService("AnalyticsService") -- Ham API
+local RunService = game:GetService("RunService")
 
 -- Variables
 local Packages = ReplicatedStorage:WaitForChild("Packages")
+
 local Services = ServerStorage:WaitForChild("Services")
 local Modules = ServerStorage:WaitForChild("Modules")
-local GameModesFolder = Modules:WaitForChild("GameModes")
-local Shared = ReplicatedStorage:WaitForChild("Shared")
 
-local WaitingRoom = Shared:WaitForChild("WaitingRoom") -- WaitingRoom modeli burada olmalı
+local GameModesFolder = Modules:WaitForChild("GameModes")
+local BetterAnalyticsService = require(Modules:WaitForChild("BetterAnalyticsService"))
 
 -- Dependencies
+local VotingService = require(Services:WaitForChild("VotingService"))
+local PlayerService = require(Services:WaitForChild("PlayerService"))
+local RewardService = require(Services:WaitForChild("RewardService"))
+local PerksService = require(Services:WaitForChild("PerkService"))
+local MapService = require(Services:WaitForChild("MapService"))
+local DataService = require(Services:WaitForChild("DataService"))
+
 local Promise = require(Packages:WaitForChild("Promise"))
 local Signal = require(Packages:WaitForChild("Signal"))
-local Charm = require(Packages:WaitForChild("Charm"))
+local Trove = require(Packages:WaitForChild("Trove"))
 local Net = require(Packages:WaitForChild("Net"))
 
--- Service Dependencies
-local DataService = require(Services:WaitForChild("DataService")) 
-local PlayerService = require(Services:WaitForChild("PlayerService"))
-local MapService = require(Services:WaitForChild("MapService"))
-local RewardService = require(Services:WaitForChild("RewardService"))
-
 -- Constants
-local CONFIG = {
-	VOTING_TIME = 15,
-	WARMUP_TIME = 10,
-	GAME_TIME = 90,
-	INTERMISSION = 5,
-	MIN_PLAYERS = 2,
-	RESULT_SCREEN_TIME = 10,
-	MAX_MAP_LOAD_RETRIES = 3
-}
+local MIN_PLAYERS_TO_START = 2
+local INTERMISSION_TIME = 15
+local MAP_VOTING_TIME = 15
+local PERK_SELECTION_TIME = 20
+local POST_GAME_WAIT = 5
 
--- Module Definition
+-- Module
 local GameService = {
 	Name = script.Name,
 	Client = {},
 
-	-- Global State
-	Gamemode = Charm.atom("Waiting"),
-	TimeLeft = Charm.atom(0), 
-	GameStatus = Charm.atom("Intermission"), 
-	SurvivorCount = Charm.atom(0),
+	-- Game State
+	State = "Waiting", -- Waiting, Voting, Loading, PerkSelection, InGame, Ended
+	TimeLeft = 0,
+	CurrentMode = nil,
 
-	-- Admin & Voting State
-	NextMapOverride = Charm.atom(nil),
-	CurrentOptions = Charm.atom({}), 
-	Votes = Charm.atom({}),             
+	-- Roles (Tablo yapısına geçildi)
+	Killers = {}, -- { [Player] = true }
+	Survivors = {}, -- { [Player] = true }
+	DeadSurvivors = {}, -- { [Player] = true } (Ölenler veya Spectatorlar)
 
-	-- Internal Game State
-	RunningPlayers = {}, 
-	RoundStartSnapshots = {},
-	_connections = {}, 
-	_gameLoopTask = nil,
-	_activeModeModule = nil,
-	_activeWaitingRoom = nil,
-	_isGameActive = false,
-	_votingCancelled = false,       
-	_loadingCancelled = false,    
+	_gameTrove = nil,
 
-	-- Analytics State
-	CurrentMapName = "Unknown",
-	GameStartTime = 0,
-
+	-- Internal Signals
 	Signals = {
+		GameStarted = Signal.new(),
 		GameEnded = Signal.new(),
-		WarmupStarted = Signal.new(), 
-		GameStarted = Signal.new(),     
+		StateChanged = Signal.new(),
+		RoleAssigned = Signal.new() -- (KillersTable, SurvivorsTable) gönderir
 	},
 
+	-- Network Centers
 	Network = {
 		StateUpdate = Net:RemoteEvent("StateUpdate"),
-		VoteOptions = Net:RemoteEvent("VoteOptions"), 
-		VoteUpdate = Net:RemoteEvent("VoteUpdate"),         
-		WarmupStarted = Net:RemoteEvent("WarmupStarted"),
-		GameStarted = Net:RemoteEvent("GameStarted"),
-		GameEnded = Net:RemoteEvent("GameEnded"),
-		CastVote = Net:RemoteEvent("CastVote"),
-		LoadLighting = Net:RemoteEvent("LoadLighting"),
-		Results = Net:RemoteEvent("Results"),
-		StartFX = Net:RemoteEvent("StartFX")
+		TimeUpdate = Net:RemoteEvent("TimeUpdate"),
+		TimeAdded = Net:RemoteEvent("TimeAdded"),
+		ModeSelected = Net:RemoteEvent("ModeSelected"),
+		RoleAssigned = Net:RemoteEvent("RoleAssigned"),
+		SendNotification = Net:RemoteEvent("SendNotification")
 	}
 }
-
-GameService.Client.Server = GameService
-
----
-
--- =============================================================================
---  CLIENT API
--- =============================================================================
-
-function GameService.Client:GetPlayersStatus(player)
-	local playerStatusList = {}
-	for _, targetPlayer in ipairs(Players:GetPlayers()) do
-		local userIdString = tostring(targetPlayer.UserId)
-		local currentRole = self.Server.RunningPlayers[userIdString] or "Lobby"
-		playerStatusList[targetPlayer.Name] = currentRole
-	end
-	return playerStatusList
-end
-
-function GameService.Client:GetPlayerData(player, targetPlayerName: string)
-	local targetPlayer = Players:FindFirstChild(targetPlayerName)
-	if not targetPlayer then return nil end
-
-	local targetIdString = tostring(targetPlayer.UserId)
-	local role = self.Server.RunningPlayers[targetIdString] or "Lobby"
-
-	return {
-		PlayerName = targetPlayer.Name,
-		Role = role,
-		UserId = targetPlayer.UserId,
-		IsAlive = (targetPlayer.Character and targetPlayer.Character:FindFirstChild("Humanoid") and targetPlayer.Character.Humanoid.Health > 0) or false
-	}
-end
-
-function GameService.Client:GetGameState()
-	return Charm.peek(GameService.GameStatus())
-end
-
----
 
 -- =============================================================================
 --  HELPER FUNCTIONS
 -- =============================================================================
 
-local function LogMetric(player, eventName, value)
-	local safeValue = tonumber(value) or 1
-	pcall(function()
-		AnalyticsService:LogCustomEvent(player, eventName, safeValue)
-	end)
+function GameService:_setState(newState, extraData)
+	self.State = newState
+	self.Network.StateUpdate:FireAllClients(newState, self.TimeLeft, extraData)
+	self.Signals.StateChanged:Fire(newState)
+	print(`[GameService] State Changed: {newState}`)
 end
 
-function GameService:_getValidPlayers()
-	local valid = {}
-	for _, player in ipairs(Players:GetPlayers()) do
-		if player.Parent then 
-			table.insert(valid, player)
-		end
-	end
-	return valid
+function GameService:_updateTimer(seconds)
+	self.TimeLeft = seconds
+	self.Network.TimeUpdate:FireAllClients(seconds)
 end
 
-function GameService:_calculateVoteCounts()
-	local options = self.CurrentOptions()
-	local currentVotes = self.Votes()
-	local voteCounts = {}
+function GameService:_getAvailableGameModes()
+	local availableModes = {}
+	local playerCount = #Players:GetPlayers()
 
-	for _, optionData in ipairs(options) do 
-		voteCounts[optionData.Id] = 0 
-	end
-
-	for userId, mapId in pairs(currentVotes) do
-		if voteCounts[mapId] ~= nil then 
-			local voteWeight = 1
-			local player = Players:GetPlayerByUserId(userId)
-			if player and player:GetAttribute("VIP") then
-				voteWeight = 2
+	for _, moduleScript in ipairs(GameModesFolder:GetChildren()) do
+		if moduleScript:IsA("ModuleScript") then
+			local success, modeData = pcall(require, moduleScript)
+			if success then
+				local minimumRequirement = modeData.MinimumPlayer or 2
+				if playerCount >= minimumRequirement then
+					table.insert(availableModes, modeData)
+				end
 			end
-			voteCounts[mapId] = voteCounts[mapId] + voteWeight 
 		end
 	end
-	return voteCounts
-end
 
-function GameService:_countSurvivors()
-	local count = 0
-	for _, role in pairs(self.RunningPlayers) do
-		if role == "Survivor" then 
-			count = count + 1 
+	if #availableModes == 0 then
+		warn("[GameService] Uygun mod bulunamadı, varsayılan seçiliyor.")
+		local firstModule = GameModesFolder:FindFirstChildWhichIsA("ModuleScript")
+		if firstModule then 
+			table.insert(availableModes, require(firstModule)) 
 		end
 	end
-	return count
+
+	return availableModes
 end
 
-function GameService:_countKillers()
-	local count = 0
-	for _, role in pairs(self.RunningPlayers) do
-		if role == "Killer" then 
-			count = count + 1 
+function GameService:_pickRandomMode()
+	local modes = self:_getAvailableGameModes()
+	if #modes == 0 then return nil end
+	return modes[math.random(1, #modes)]
+end
+
+-- Rol Dağıtımı (Çoklu Killer Destekli)
+function GameService:_assignRoles()
+	local allPlayers = Players:GetPlayers()
+	local playerCount = #allPlayers
+
+	-- Listeyi karıştır (Shuffle)
+	for i = playerCount, 2, -1 do
+		local j = math.random(i)
+		allPlayers[i], allPlayers[j] = allPlayers[j], allPlayers[i]
+	end
+
+	self.Killers = {}
+	self.Survivors = {}
+	self.DeadSurvivors = {}
+
+	-- Modun istediği Killer sayısı (Default: 1)
+	-- Duo için KillerCount = 2, Classic için = 1, Infection için = 1 (başlangıç)
+	local requiredKillerCount = self.CurrentMode.KillerCount or 1
+
+	-- Eğer oyuncu sayısı yetersizse (örn 2 kişi var ama mod 2 killer istiyor), en az 1 survivor bırak
+	if requiredKillerCount >= playerCount then
+		requiredKillerCount = math.max(1, playerCount - 1)
+	end
+
+	-- Rolleri Ata
+	for i, Player in ipairs(allPlayers) do
+		if i <= requiredKillerCount then
+			self.Killers[Player] = true
+		else
+			self.Survivors[Player] = true
 		end
 	end
-	return count
-end
 
-function GameService:SetNextMap(mapName)
-	if MapService:IsValidMap(mapName) then
-		self.NextMapOverride(mapName)
-		return true
-	end
-	return false
-end
+	-- Clientlara Bildir
+	-- Not: Client tarafında tabloyu {UserId} veya Player listesi olarak işlemek gerekebilir.
+	self.Network.RoleAssigned:FireAllClients({
+		Killers = self.Killers,
+		Survivors = self.Survivors
+	})
 
-function GameService:CastVote(player, mapId)
-	if self.GameStatus() ~= "OnVoting" then return end
-	if self._votingCancelled then return end
-
-	local isValid = false
-	for _, option in ipairs(self.CurrentOptions()) do 
-		if option.Id == mapId then 
-			isValid = true 
-			break 
-		end 
-	end
-
-	if not isValid then return end
-
-	self.Votes(function(currentVotes) 
-		local newVotes = table.clone(currentVotes) 
-		newVotes[player.UserId] = mapId 
-		return newVotes 
-	end)
-end
-
-function GameService:_spawnWaitingRoom()
-	if self._activeWaitingRoom then return end
-
-	if WaitingRoom then
-		self._activeWaitingRoom = WaitingRoom:Clone()
-		self._activeWaitingRoom.Parent = workspace
-
-		if not self._activeWaitingRoom.PrimaryPart then
-			warn("UYARI: WaitingRoom modelinin PrimaryPart'ı ayarlı değil! Işınlanma hatalı olabilir.")
-		end
-	else
-		warn("KRİTİK HATA: Shared/WaitingRoom bulunamadı!")
-	end
-end
-
-function GameService:ResetMatch()
-	-- State Reset
-	self.GameStatus("Intermission")
-	self.Gamemode("Waiting")
-	self._activeModeModule = nil
-	self.RunningPlayers = {}
-	self.RoundStartSnapshots = {}
-	self.Votes({})
-	self.CurrentOptions({})
-	self.NextMapOverride(nil)
-	self.SurvivorCount(0)
-
-	-- [CRITICAL FIX] Client'taki Oylama Ekranını Zorla Kapat
-	-- Boş seçenek ve 0 süre göndererek Client UI'ın kapanmasını garanti ediyoruz.
-	pcall(function()
-		self.Network.VoteOptions:FireAllClients({}, 0)
-		self.Network.StateUpdate:FireAllClients("TimeLeft", 0)
-	end)
-
-	-- Analytics Reset
-	self.CurrentMapName = "Unknown"
-	self.GameStartTime = 0
-
-	-- Flags Reset
-	self._isGameActive = false
-	self._votingCancelled = false
-	self._loadingCancelled = false
-
-	if self._gameLoopTask then 
-		task.cancel(self._gameLoopTask) 
-		self._gameLoopTask = nil 
-	end
-
-	-- WaitingRoom Temizliği
-	if self._activeWaitingRoom then
-		self._activeWaitingRoom:Destroy()
-		self._activeWaitingRoom = nil
-	end
-
-	MapService:Cleanup()
-	PlayerService:DespawnAll()
+	self.Signals.RoleAssigned:Fire(self.Killers, self.Survivors)
 end
 
 -- =============================================================================
---  GAME PHASES
+--  GAME LOOP STEPS
 -- =============================================================================
 
-function GameService:RunVotingPhase()
-	self.GameStatus("OnVoting")
-	self.TimeLeft(CONFIG.VOTING_TIME)
-	self._votingCancelled = false
+function GameService:_stepIntermission()
+	self:_setState("Intermission")
 
-	local processedOptions = MapService:GetProcessedVoteOptions(3)
-	self.CurrentOptions(processedOptions)
-	self.Votes({})
-
-	self.Network.VoteOptions:FireAllClients(processedOptions, CONFIG.VOTING_TIME)
-
-	for currentTime = CONFIG.VOTING_TIME, 1, -1 do
-		-- Her saniye iptal durumunu kontrol et
-		if self._votingCancelled then return nil end
-		if #Players:GetPlayers() < CONFIG.MIN_PLAYERS then 
-			warn("Voting cancelled: Not enough players")
-			self._votingCancelled = true
-			return nil 
+	for seconds = INTERMISSION_TIME, 1, -1 do
+		if #Players:GetPlayers() < MIN_PLAYERS_TO_START then 
+			return "NotEnoughPlayers"
 		end
-
-		self.TimeLeft(currentTime)
+		self:_updateTimer(seconds)
 		task.wait(1)
 	end
 
-	-- Son bir kontrol
-	if self._votingCancelled or #Players:GetPlayers() < CONFIG.MIN_PLAYERS then 
-		self._votingCancelled = true
-		return nil 
+	return "Next"
+end
+
+function GameService:_stepVoting()
+	self:_setState("Voting")
+	VotingService:StartVoting()
+
+	for seconds = MAP_VOTING_TIME, 1, -1 do
+		if #Players:GetPlayers() < MIN_PLAYERS_TO_START then
+			VotingService:EndVoting()
+			return "NotEnoughPlayers"
+		end
+		self:_updateTimer(seconds)
+		task.wait(1)
 	end
 
-	local voteCounts = self:_calculateVoteCounts()
-	local maxVotes, candidates = -1, {}
+	local winnerMapName = VotingService:EndVoting()
+	task.wait(3)
+	return "Next", winnerMapName
+end
 
-	for mapId, count in pairs(voteCounts) do
-		if count > maxVotes then 
-			maxVotes = count 
-			candidates = {mapId} 
-		elseif count == maxVotes then 
-			table.insert(candidates, mapId) 
+function GameService:_stepLoading(mapName)
+	self:_setState("Loading")
+
+	self.CurrentMode = self:_pickRandomMode()
+	if not self.CurrentMode then return "Error" end
+
+	print(`[GameService] Selected Mode: {self.CurrentMode.Name}`)
+	self.Network.ModeSelected:FireAllClients(self.CurrentMode.Name)
+
+	local mapModel = MapService:LoadMap(mapName)
+	local spawns = MapService:GetSpawns(mapModel)
+
+	self:_assignRoles()
+
+	-- Survivorları Spawnla
+	for Survivor, _ in pairs(self.Survivors) do
+		if Survivor.Parent then
+			local randomSpawn = spawns[math.random(1, #spawns)]
+			PlayerService:SpawnPlayerTo(Survivor, randomSpawn)
 		end
 	end
 
-	local winnerId = candidates[math.random(1, #candidates)]
-	local winnerModule = MapService:FindMapModule(winnerId)
-
-	if not winnerId and #processedOptions > 0 then
-		winnerId = processedOptions[1].Id
-	end
-
-	return winnerId
+	task.wait(1)
+	return "Next"
 end
 
-function GameService:_loadMapSafely(mapName)
-	local retries = 0
-	local mapData = nil
+function GameService:_stepPerkSelection()
+	self:_setState("PerkSelection")
 
-	while retries < CONFIG.MAX_MAP_LOAD_RETRIES do
-		local success, result = pcall(function() 
-			return MapService:LoadMap(mapName) 
-		end)
+	if not self.CurrentMode.PerkSelectionLimit or self.CurrentMode.PerkSelectionLimit > 0 then
+		PerksService:GeneratePerks(3)
+		PerksService:PerkSelectionLimit(self.CurrentMode.PerkSelectionLimit or 1)
+	end
 
-		if success and result then
-			mapData = result
-			break
+	for seconds = PERK_SELECTION_TIME, 1, -1 do
+		local survivorCount = 0
+		for Survivor in pairs(self.Survivors) do
+			if Survivor.Parent then survivorCount += 1 end
+		end
+
+		-- Aktif Killer var mı kontrolü (Çoklu killer için döngü)
+		local activeKillerCount = 0
+		for Killer in pairs(self.Killers) do
+			if Killer.Parent then activeKillerCount += 1 end
+		end
+
+		if survivorCount == 0 then return "AllSurvivorsLeft" end
+		if activeKillerCount == 0 then return "KillersLeft" end
+
+		self:_updateTimer(seconds)
+		task.wait(1)
+	end
+
+	return "Next"
+end
+
+function GameService:_stepInGame()
+	self:_setState("InGame")
+	self.Signals.GameStarted:Fire()
+	self._gameTrove = Trove.new()
+
+	local mapModel = MapService.CurrentMap
+	local spawns = MapService:GetSpawns(mapModel)
+
+	-- 1. Killerları Sahneye Al (Çoklu Döngü)
+	local activeKillers = 0
+	for Killer, _ in pairs(self.Killers) do
+		if Killer.Parent then
+			activeKillers += 1
+			local killerSpawn = spawns[math.random(1, #spawns)]
+			PlayerService:SpawnPlayerTo(Killer, killerSpawn)
+
+			-- Killer Mod Executive
+			if self.CurrentMode.KillerExecutive then
+				task.spawn(self.CurrentMode.KillerExecutive, Killer)
+			end
+
+			-- Killer Perk
+			PerksService:GiveMurdererPerk(Killer)
 		else
-			retries = retries + 1
-			warn(string.format("Map load retry %d/%d", retries, CONFIG.MAX_MAP_LOAD_RETRIES))
-
-			if retries < CONFIG.MAX_MAP_LOAD_RETRIES then
-				pcall(function() 
-					MapService:Cleanup() 
-				end)
-				task.wait(1)
-			end
+			-- Başlangıçta çıkmış killerları listeden temizleyebiliriz
+			self.Killers[Killer] = nil
 		end
 	end
 
-	if not mapData then warn("Failed to load map") end
-	return mapData
-end
+	if activeKillers == 0 then return "KillersLeft" end
 
--- =============================================================================
---  START GAME
--- =============================================================================
-
-function GameService:StartGame()
-	if self._isGameActive then return Promise.reject("Game already active") end
-
-	local activePlayers = self:_getValidPlayers()
-	if #activePlayers < CONFIG.MIN_PLAYERS then return Promise.reject("Yetersiz Oyuncu (Start)") end
-
-	self._isGameActive = true
-	self._loadingCancelled = false
-
-	-- WaitingRoom Oluştur
-	self:_spawnWaitingRoom()
-
-	-- 1. Voting
-	local mapName = self.NextMapOverride() or self:RunVotingPhase()
-	self.NextMapOverride(nil)
-
-	if self._votingCancelled or not mapName then 
-		self._isGameActive = false
-		return Promise.reject("Voting Cancelled") 
-	end
-
-	self.CurrentMapName = tostring(mapName.Name) 
-	self.GameStatus("Loading")
-
-	-- 2. Data Loading
-	local dataPromises = {}
-	activePlayers = self:_getValidPlayers()
-	for _, player in ipairs(activePlayers) do 
-		table.insert(dataPromises, DataService:GetProfile(player)) 
-	end
-
-	return Promise.all(dataPromises):andThen(function()
-
-		-- [CHECKPOINT 1] Data Yükleme Kontrolü
-		if not self._isGameActive or self._loadingCancelled or #Players:GetPlayers() < CONFIG.MIN_PLAYERS then
-			error("Loading Aborted: State Invalid after Data Load")
-		end
-
-		self.RoundStartSnapshots = {}
-		activePlayers = self:_getValidPlayers()
-		for _, player in ipairs(activePlayers) do
-			self.RoundStartSnapshots[player] = self:_getPlayerDataSnapshot(player)
-		end
-
-		-- 3. Map Loading
-		local mapData = self:_loadMapSafely(mapModule)
-		if not mapData then error("Map Load Failed") end
-
-		-- [CHECKPOINT 2] Harita Yükleme Kontrolü
-		if not self._isGameActive or self._loadingCancelled or #Players:GetPlayers() < CONFIG.MIN_PLAYERS then
-			error("Loading Aborted: State Invalid after Map Load")
-		end
-
-		if mapData.Lighting then 
-			pcall(function() 
-				self.Network.LoadLighting:FireAllClients(mapData.Lighting) 
-			end)
-		end
-
-		-- 4. Mode Setup
-		self:_setupGameMode(activePlayers)
-
-		-- [CHECKPOINT 3] Setup Kontrolü
-		if not self._isGameActive then error("Game cancelled during setup") end
-
-		-- KILLER'I WAITING ROOM'A IŞINLA
-		if self._activeWaitingRoom and self._activeWaitingRoom.PrimaryPart then
-			for userIdString, role in pairs(self.RunningPlayers) do
-				if role == "Killer" then
-					local killerPlayer = Players:GetPlayerByUserId(tonumber(userIdString))
-					if killerPlayer and killerPlayer.Character then
-						task.wait(0.1)
-						killerPlayer.Character:PivotTo(self._activeWaitingRoom:GetPivot())
-					end
-				end
-			end
-		end
-
-		local currentSurvivorCount = 0
-		for _, role in pairs(self.RunningPlayers) do 
-			if role == "Survivor" then 
-				currentSurvivorCount = currentSurvivorCount + 1 
-			end 
-		end
-		self.SurvivorCount(currentSurvivorCount)
-
-		-- 5. Warmup
-		self.GameStatus("Warmup")
-		self.TimeLeft(CONFIG.WARMUP_TIME)
-
-		self.Network.WarmupStarted:FireAllClients(self.Gamemode(), self.RunningPlayers, CONFIG.WARMUP_TIME)
-		self.Signals.WarmupStarted:Fire()
-
-		local activeInstancesRoles = {}
-		for userIdString, role in pairs(self.RunningPlayers) do
-			local player = Players:GetPlayerByUserId(tonumber(userIdString))
-			if player and player.Parent then 
-				activeInstancesRoles[player] = role 
-			else 
-				self.RunningPlayers[userIdString] = nil 
-			end
-		end
-
-		-- Sadece Survivorları haritaya spawn et
-		PlayerService:SpawnSurvivors(activeInstancesRoles, mapData.Spawns)
-		self:_setupPlayerMonitoring()
-
-		-- Warmup Döngüsü
-		for currentTime = CONFIG.WARMUP_TIME, 1, -1 do
-			if not self._isGameActive then 
-				warn("StartGame Aborted: Game ended externally during Warmup")
-				return 
-			end
-
-			if #Players:GetPlayers() < CONFIG.MIN_PLAYERS then 
-				self:EndGame(nil) 
-				return 
-			end
-
-			self.TimeLeft(currentTime)
-			task.wait(1)
-		end
-
-		-- [CHECKPOINT 4] Son Kontrol
-		if not self._isGameActive then 
-			warn("StartGame Aborted: Game ended right before start")
-			return 
-		end
-
-		self.GameStatus("GameRunning")
-		self.GameStartTime = os.time()
-
-		-- 6. Killer Spawn & Game Loop
-		local currentPlayersForSpawn = {}
-		for userIdString, role in pairs(self.RunningPlayers) do
-			local player = Players:GetPlayerByUserId(tonumber(userIdString))
-			if player and player.Parent then 
-				currentPlayersForSpawn[player] = role 
-			end
-		end
-
-		PlayerService:SpawnKillers(currentPlayersForSpawn, mapData.Spawns)
-
-		local modeDuration = (self._activeModeModule and self._activeModeModule.Time) or CONFIG.GAME_TIME
-		self.Network.GameStarted:FireAllClients(modeDuration)
-		self.Network.StateUpdate:FireAllClients("TimeLeft", modeDuration) 
-		self.Signals.GameStarted:Fire()
-
-		self:_startTimeLoop()
-
-	end):catch(function(err)
-		warn("StartGame Error/Abort:", err)
-		self._isGameActive = false
-		self._loadingCancelled = false
-		self:ResetMatch()
-	end)
-end
-
-function GameService:_setupGameMode(players)
-	local connectedPlayers = {}
-	for _, player in ipairs(players) do
-		if player and player.Parent then 
-			table.insert(connectedPlayers, player) 
+	-- 2. Survivor Mod Executive
+	for Survivor, _ in pairs(self.Survivors) do
+		if Survivor.Parent and self.CurrentMode.SurvivorExecutive then
+			task.spawn(self.CurrentMode.SurvivorExecutive, Survivor)
 		end
 	end
 
-	if #connectedPlayers < CONFIG.MIN_PLAYERS then 
-		error("Not enough players for mode setup") 
+	-- 3. Mod OnStart
+	if self.CurrentMode.OnStart then
+		local currentPlayerList = {}
+		for Killer in pairs(self.Killers) do table.insert(currentPlayerList, Killer) end
+		for Survivor in pairs(self.Survivors) do table.insert(currentPlayerList, Survivor) end
+
+		task.spawn(self.CurrentMode.OnStart, self._gameTrove, currentPlayerList)
 	end
 
-	local modes = GameModesFolder:GetChildren()
-	local selectedScript = modes[math.random(1, #modes)]
-	local modeModule = require(selectedScript)
+	-- 4. Olay Dinleyicileri
 
-	if modeModule.MinPlayers and #connectedPlayers < modeModule.MinPlayers then
-		modeModule = require(GameModesFolder.Classic)
-		selectedScript = GameModesFolder.Classic
-	end
+	-- Survivor Ölümü
+	self._gameTrove:Connect(PlayerService.Signals.PlayerDied, function(Player)
+		if self.Survivors[Player] then
+			self.DeadSurvivors[Player] = true
 
-	self._activeModeModule = modeModule
-	self.Gamemode(selectedScript.Name)
-
-	local rawRoles = modeModule:Start(self, connectedPlayers)
-	self.RunningPlayers = {} 
-
-	for playerInstance, roleName in pairs(rawRoles) do
-		if playerInstance and playerInstance:IsA("Player") and playerInstance.Parent then
-			local userIdString = tostring(playerInstance.UserId)
-			self.RunningPlayers[userIdString] = roleName
-
-			if roleName == "Killer" then 
-				PlayerService:ResetChance(playerInstance)
-			else 
-				PlayerService:AddChance(playerInstance, 1) 
+			-- Ekstra Süre
+			if self.CurrentMode.ExtraTime then
+				self.TimeLeft += self.CurrentMode.ExtraTime
+				self:_updateTimer(self.TimeLeft)
+				self.Network.TimeAdded:FireAllClients(self.CurrentMode.ExtraTime)
 			end
-		end
-	end
-end
-
-function GameService:_setupPlayerMonitoring()
-	for userIdString, role in pairs(self.RunningPlayers) do
-		local userId = tonumber(userIdString)
-		local player = Players:GetPlayerByUserId(userId)
-
-		if player and player.Parent then
-			local function monitorCharacter(character)
-				local humanoid = character:WaitForChild("Humanoid", 10)
-				if not humanoid then return end
-
-				local connection = humanoid.Died:Connect(function()
-					if not self._isGameActive then return end
-					if self.GameStatus() ~= "GameRunning" and self.GameStatus() ~= "Warmup" then return end
-
-					if self._activeModeModule and self._activeModeModule.OnPlayerDied then
-						pcall(function() 
-							self._activeModeModule:OnPlayerDied(self, player) 
-						end)
-					end
-
-					if role == "Survivor" then
-						local newTime = self.TimeLeft() + 7
-						self.TimeLeft(newTime)
-						self.Network.StateUpdate:FireAllClients("TimeLeft", newTime)
-
-						self.RunningPlayers[userIdString] = nil 
-						self.SurvivorCount(self:_countSurvivors())
-
-						task.delay(3, function()
-							if self._isGameActive and player and player.Parent then 
-								pcall(function() 
-									player:LoadCharacterAsync() 
-								end)
-							end
-						end)
-
-						if self:_countSurvivors() <= 0 then
-							self:EndGame("Killer")
-						end
-
-					elseif role == "Killer" then
-						self:EndGame("Survivors")
-					end
-				end)
-				table.insert(self._connections, connection)
-			end
-
-			if player.Character then 
-				pcall(function() 
-					monitorCharacter(player.Character) 
-				end) 
-			end
-
-			local conn = player.CharacterAdded:Connect(function(char) 
-				pcall(function() 
-					monitorCharacter(char) 
-				end) 
-			end)
-			table.insert(self._connections, conn)
-		end
-	end
-end
-
-function GameService:_startTimeLoop()
-	if self._gameLoopTask then task.cancel(self._gameLoopTask) end
-
-	local modeDuration = (self._activeModeModule and self._activeModeModule.Time) or CONFIG.GAME_TIME
-	self.TimeLeft(modeDuration)
-
-	self._gameLoopTask = task.spawn(function()
-		while self.TimeLeft() > 0 do
-			task.wait(1)
-
-			if not self._isGameActive then break end
-
-			self.TimeLeft(self.TimeLeft() - 1)
-
-			if self._activeModeModule and self._activeModeModule.CheckWinCondition then
-				local success, winner = pcall(function() 
-					return self._activeModeModule:CheckWinCondition(self) 
-				end)
-
-				if success and winner then 
-					self:EndGame(winner) 
-					return
-				end
-			end
-		end
-
-		if self._isGameActive and self.TimeLeft() <= 0 then
-			-- Time Out: Survivors Win
-			for userIdString, role in pairs(self.RunningPlayers) do
-				if role == "Killer" then
-					local player = Players:GetPlayerByUserId(tonumber(userIdString))
-					if player and player.Parent and player.Character then
-						local h = player.Character:FindFirstChild("Humanoid")
-						if h then 
-							pcall(function() h.Health = 0 end) 
-						end
-					end
-				end
-			end
-
-			task.wait(1) 
-
-			if self.GameStatus() == "GameRunning" then
-				self:EndGame("Survivors")
-			end
+		elseif self.Killers[Player] then
+			-- Bir Killer öldüyse (Örn: Survivorlar tuzak kurdu vs.)
+			-- Killer'ı tamamen silmiyoruz, belki respawn vardır modda ama şimdilik "Safe" oynuyoruz
+			-- Eğer mod "Killer ölünce elenir" diyorsa buradan yönetilir.
+			-- Şimdilik spectate moduna atılabilir.
 		end
 	end)
-end
 
-function GameService:_getPlayerDataSnapshot(player)
-	if not player or not player.Parent then return {Token = 0, XP = 0, Level = 1, TargetXP = 100} end
-
-	local success, data = pcall(function() 
-		return DataService:GetData(player) 
+	-- Oyundan Çıkma
+	self._gameTrove:Connect(Players.PlayerRemoving, function(Player)
+		if self.Killers[Player] then
+			self.Killers[Player] = nil -- Killer tablosundan sil
+		elseif self.Survivors[Player] then
+			self.Survivors[Player] = nil
+			self.DeadSurvivors[Player] = true
+		end
 	end)
 
-	if success and data then
-		return {
-			Token = data.CurrencyData.Value, 
-			XP = data.LevelData.ValueXP,
-			Level = data.LevelData.Level, 
-			TargetXP = data.LevelData.TargetXP
+	-- 5. Ana Döngü
+	local duration = self.CurrentMode.Duration or 120
+	self:_updateTimer(duration)
+
+	local winReason = "TimeUp"
+
+	while self.TimeLeft > 0 do
+		task.wait(1)
+		self:_updateTimer(self.TimeLeft - 1)
+
+		-- A. Killerlar Çıktı mı?
+		local killerCount = 0
+		for Killer in pairs(self.Killers) do
+			if Killer.Parent then killerCount += 1 end
+		end
+
+		if killerCount == 0 then
+			winReason = "KillersLeft"
+			break
+		end
+
+		-- B. Survivorlar Bitti mi?
+		local aliveCount = 0
+		for Survivor in pairs(self.Survivors) do
+			if Survivor.Parent and not self.DeadSurvivors[Survivor] then
+				aliveCount += 1
+			end
+		end
+
+		if aliveCount == 0 then
+			winReason = "SurvivorsEliminated"
+			break
+		end
+	end
+
+	return "Next", winReason
+end
+
+function GameService:_stepEnded(winReason)
+	local winnerRole = "Survivor"
+
+	if winReason == "SurvivorsEliminated" then
+		winnerRole = "Killer"
+	end
+
+	-- 1. Ödülleri Dağıt
+	if winnerRole == "Survivor" then
+		local aliveSurvivors = {}
+		for Survivor in pairs(self.Survivors) do
+			if Survivor.Parent and not self.DeadSurvivors[Survivor] then
+				table.insert(aliveSurvivors, Survivor)
+			end
+		end
+
+		for _, Survivor in ipairs(aliveSurvivors) do
+			RewardService:AddCurrency(Survivor, 100, "SurvivorWin")
+		end
+
+		if #aliveSurvivors <= 3 then
+			for _, Survivor in ipairs(aliveSurvivors) do
+				RewardService:AddCurrency(Survivor, 300, "EliteSurvivor")
+			end
+		end
+
+	elseif winnerRole == "Killer" then
+		-- Tüm aktif Killerlara ödül ver
+		for Killer in pairs(self.Killers) do
+			if Killer.Parent then
+				RewardService:AddCurrency(Killer, 100, "KillerWin")
+			end
+		end
+	end
+
+	-- 2. Verileri Hazırla
+	-- Killer Verisi (Çoklu Destekli Yapı)
+	local killersData = {}
+	for Killer in pairs(self.Killers) do
+		local skin = "Default"
+		local success, data = DataService:GetData(Killer):await()
+		if success and data.Equippeds then
+			skin = data.Equippeds.KillerSkin or "Default"
+		end
+
+		-- Tablo olarak ekle: { [Player] = {Skin = "..."} }
+		killersData[Killer] = {
+			EquippedSkin = skin
 		}
 	end
-	return {Token = 0, XP = 0, Level = 1, TargetXP = 100}
-end
 
-function GameService:_calculateEarnings(startData, endData)
-	if not startData or not endData then return {Token = 0, XP = 0} end
-
-	local earnedToken = math.max(0, endData.Token - startData.Token)
-	local earnedXP = 0
-
-	if endData.Level == startData.Level then 
-		earnedXP = math.max(0, endData.XP - startData.XP)
-	else
-		local levelDiff = endData.Level - startData.Level
-		earnedXP = (levelDiff * startData.TargetXP) + (endData.XP - startData.XP) 
+	local survivorsData = {}
+	for Survivor in pairs(self.Survivors) do
+		survivorsData[Survivor] = {
+			IsDead = (self.DeadSurvivors[Survivor] == true)
+		}
 	end
 
-	return {Token = earnedToken, XP = math.max(0, earnedXP)}
-end
-
--- =============================================================================
---  END GAME LOGIC
--- =============================================================================
-
-function GameService:EndGame(winningTeam)
-	if not self._isGameActive then
-		warn("EndGame ignored: Game already ended")
-		return
-	end
-
-	local matchDuration = math.max(0, os.time() - self.GameStartTime)
-	local endReason = "Unknown"
-
-	if winningTeam == "Killer" then 
-		endReason = "AllSurvivorsDead"
-	elseif winningTeam == "Survivors" then
-		if self.TimeLeft() <= 0 then 
-			endReason = "TimeLimit" 
-		else 
-			endReason = "KillerDeath" 
-		end
-	else 
-		endReason = "ForcedEnd" 
-	end
-
-	local mapName = tostring(self.CurrentMapName or "Unknown")
-
-	for userIdString, role in pairs(self.RunningPlayers) do
-		local player = Players:GetPlayerByUserId(tonumber(userIdString))
-		if player then
-			local isWin = false
-			if winningTeam == "Killer" and role == "Killer" then isWin = true end
-			if winningTeam == "Survivors" and role == "Survivor" then isWin = true end
-
-			LogMetric(player, "Match_Duration", matchDuration)
-			LogMetric(player, "Match_Map_" .. mapName, 1)
-			LogMetric(player, "Match_Result_" .. role .. "_" .. (isWin and "Win" or "Loss"), 1)
-			LogMetric(player, "Match_EndReason_" .. endReason, 1)
-		end
-	end
-
-	self._isGameActive = false 
-
-	if self._gameLoopTask then 
-		task.cancel(self._gameLoopTask) 
-		self._gameLoopTask = nil 
-	end
-
-	for _, connection in ipairs(self._connections) do 
-		pcall(function() 
-			connection:Disconnect() 
-		end) 
-	end
-	self._connections = {}
-
-	-- REWARDS
-	for userIdString, role in pairs(self.RunningPlayers) do
-		local player = Players:GetPlayerByUserId(tonumber(userIdString))
-		if player and player.Parent then
-			pcall(function()
-				if winningTeam == "Killer" and role == "Killer" then
-					RewardService:AddXP(player, 100)
-					RewardService:AddCurrency(player, 50, "MatchWin_Killer")
-				elseif winningTeam == "Survivors" and role == "Survivor" then
-					RewardService:AddXP(player, 25)
-					RewardService:AddCurrency(player, 25, "MatchWin_Survivor")
-				else
-					RewardService:AddXP(player, 10)
-					RewardService:AddCurrency(player, 5, "MatchParticipation")
-				end
-			end)
-		end
-	end
-
-	local resultsPayload = {
-		Winner = winningTeam,
-		KillerName = "None",
-		KillerId = 0,
-		KillerSkin = "Wendigo",
-		Survivors = {}, 
+	local resultData = {
+		Winner = winnerRole,
+		Killers = killersData, -- Değişti: Artık tüm killerlar burada
+		Survivors = survivorsData
 	}
 
-	for userIdString, role in pairs(self.RunningPlayers) do
-		if role == "Killer" then
-			local killerPlayer = Players:GetPlayerByUserId(tonumber(userIdString))
-			if killerPlayer and killerPlayer.Parent then
-				resultsPayload.KillerName = killerPlayer.Name
-				resultsPayload.KillerId = killerPlayer.UserId
-				pcall(function()
-					local profile = DataService.LoadedProfiles[killerPlayer]
-					if profile and profile.Data.Equippeds.KillerSkin then
-						resultsPayload.KillerSkin = profile.Data.Equippeds.KillerSkin
-					end
-				end)
-			else 
-				resultsPayload.KillerName = "Disconnected" 
-			end
-			break 
-		end
+	-- 3. Bildir
+	self:_setState("Ended", resultData)
+	self.Signals.GameEnded:Fire(resultData)
+
+	BetterAnalyticsService:LogGameEnd(winnerRole, self.CurrentMode.Name, self.TimeLeft)
+
+	task.wait(POST_GAME_WAIT)
+
+	-- 4. Temizlik
+	if self._gameTrove then
+		self._gameTrove:Destroy()
+		self._gameTrove = nil
 	end
 
-	for _, player in ipairs(Players:GetPlayers()) do
-		if player and player.Parent then
-			local uidString = tostring(player.UserId)
-			local role = self.RunningPlayers[uidString]
-			local isDead = (role == nil)
+	PlayerService:DespawnAll()
+	PerksService:ResetPerks()
+	MapService:UnloadMap()
 
-			if uidString ~= tostring(resultsPayload.KillerId) then
-				table.insert(resultsPayload.Survivors, { 
-					Name = player.Name, 
-					UserId = player.UserId, 
-					IsDead = isDead 
-				})
-			end
-		end
-	end
+	self.Killers = {}
+	self.Survivors = {}
+	self.DeadSurvivors = {}
+	self.CurrentMode = nil
 
-	for _, player in ipairs(Players:GetPlayers()) do
-		if player and player.Parent then
-			pcall(function()
-				local startData = self.RoundStartSnapshots[player] or {Token = 0, XP = 0, Level = 1, TargetXP = 100}
-				local endData = self:_getPlayerDataSnapshot(player)
-				local earned = self:_calculateEarnings(startData, endData)
-
-				local personalizedData = table.clone(resultsPayload)
-				personalizedData.MyRewards = earned
-
-				self.Network.Results:FireClient(player, personalizedData)
-			end)
-		end
-	end
-
-	self.TimeLeft(0)
-	self.Network.StateUpdate:FireAllClients("TimeLeft", 0)
-
-	if winningTeam == "Killer" then 
-		self.GameStatus("MurdererWin")
-	elseif winningTeam == "Survivors" then 
-		self.GameStatus("SurvivorsWin")
-	else 
-		self.GameStatus("Intermission") 
-	end
-
-	self.Network.GameEnded:FireAllClients()
-	self.Signals.GameEnded:Fire()
+	return "Next"
 end
 
 -- =============================================================================
---  INITIALIZATION
+--  MAIN LOOP
 -- =============================================================================
 
-function GameService:OnStart()
-	local function sync(name, atom)
-		Charm.effect(function() 
-			pcall(function() 
-				self.Network.StateUpdate:FireAllClients(name, atom()) 
-			end) 
-		end)
+function GameService:GameLoop()
+	while true do
+		local status, result
+
+		-- 1. Bekleme
+		status = self:_stepIntermission()
+		if status == "NotEnoughPlayers" then
+			self:_setState("Waiting")
+			repeat task.wait(1) until #Players:GetPlayers() >= MIN_PLAYERS_TO_START
+			continue
+		end
+
+		-- 2. Harita
+		status, result = self:_stepVoting()
+		if status == "NotEnoughPlayers" then
+			self:_setState("Waiting")
+			repeat task.wait(1) until #Players:GetPlayers() >= MIN_PLAYERS_TO_START
+			continue
+		end
+		local selectedMap = result
+
+		-- 3. Yükleme
+		status = self:_stepLoading(selectedMap)
+		if status == "Error" then
+			warn("[GameService] Game Load Error, restarting loop")
+			task.wait(1)
+			continue
+		end
+
+		-- 4. Perk
+		status = self:_stepPerkSelection()
+		if status == "AllSurvivorsLeft" or status == "KillersLeft" then
+			PlayerService:DespawnAll()
+			MapService:UnloadMap()
+			PerksService:ResetPerks()
+			continue
+		end
+
+		-- 5. Oyun
+		status, result = self:_stepInGame()
+		local winReason = result
+
+		-- 6. Bitiş
+		self:_stepEnded(winReason)
 	end
+end
 
-	sync("Gamemode", self.Gamemode)
-	sync("GameStatus", self.GameStatus)
-	sync("SurvivorCount", self.SurvivorCount)
-
-	Charm.effect(function() 
-		pcall(function() 
-			self.Network.VoteUpdate:FireAllClients(self:_calculateVoteCounts()) 
-		end) 
-	end)
-
-	Players.PlayerRemoving:Connect(function(player)
-		local userIdString = tostring(player.UserId)
-		local playerCount = #Players:GetPlayers()
-
-		if self.GameStatus() == "OnVoting" and playerCount < CONFIG.MIN_PLAYERS then 
-			self._votingCancelled = true 
-		end
-
-		if self.GameStatus() == "Loading" and playerCount < CONFIG.MIN_PLAYERS then 
-			self._loadingCancelled = true 
-		end
-
-		if self.RunningPlayers[userIdString] then 
-			local role = self.RunningPlayers[userIdString]
-
-			if self.GameStatus() == "GameRunning" and self._isGameActive then
-				local timePlayed = math.max(0, os.time() - self.GameStartTime)
-				local mapName = tostring(self.CurrentMapName or "Unknown")
-
-				LogMetric(player, "Player_Dropout_" .. role, timePlayed)
-				LogMetric(player, "Player_Dropout_Map_" .. mapName, 1)
-			end
-
-			self.RunningPlayers[userIdString] = nil
-
-			if self.GameStatus() == "GameRunning" or self.GameStatus() == "Warmup" then
-				if role == "Survivor" then
-					self.SurvivorCount(self:_countSurvivors())
-					if self:_countSurvivors() <= 0 then 
-						self:EndGame("Killer") 
-					end
-				elseif role == "Killer" then
-					if self:_countKillers() <= 0 then 
-						self:EndGame("Survivors") 
-					end
-				end
-			end
-		end
-	end)
-
-	self.Network.CastVote.OnServerEvent:Connect(function(player, mapId) 
-		pcall(function() 
-			self:CastVote(player, mapId) 
-		end) 
-	end)
-
-	Players.PlayerAdded:Connect(function(player)
-		pcall(function()
-			self.Network.StateUpdate:FireClient(player, "Gamemode", self.Gamemode())
-			self.Network.StateUpdate:FireClient(player, "GameStatus", self.GameStatus())
-			self.Network.StateUpdate:FireClient(player, "SurvivorCount", self.SurvivorCount())
-			self.Network.StateUpdate:FireClient(player, "TimeLeft", self.TimeLeft())
-
-			if self.GameStatus() == "OnVoting" and #self.CurrentOptions() > 0 and not self._votingCancelled then
-				self.Network.VoteOptions:FireClient(player, self.CurrentOptions(), self.TimeLeft())
-				task.defer(function() 
-					if player and player.Parent then 
-						self.Network.VoteUpdate:FireClient(player, self:_calculateVoteCounts()) 
-					end 
-				end)
-			end
-		end)
-	end)
-
+function GameService:OnStart()
 	task.spawn(function()
-		while true do
-			while #Players:GetPlayers() < CONFIG.MIN_PLAYERS do 
-				if self.GameStatus() ~= "Intermission" then 
-					self:ResetMatch() 
-				end
-				task.wait(5) 
-			end
-
-			task.wait(CONFIG.INTERMISSION)
-
-			local success, promise = pcall(function() 
-				return self:StartGame() 
-			end)
-
-			if success and promise then
-				local promiseSuccess, promiseResult = pcall(function() 
-					return promise:getStatus() ~= Promise.Status.Rejected 
-				end)
-
-				if promiseSuccess and promiseResult then
-					if self._isGameActive then 
-						self.Signals.GameEnded:Wait() 
-					end
-					task.wait(CONFIG.RESULT_SCREEN_TIME) 
-					self:ResetMatch()
-				else
-					warn("Game failed:", promiseResult)
-					-- [CRITICAL FIX] Önce Reset at, sonra bekle. 
-					-- Bu sayede oyuncular bozuk ekranda beklemez.
-					self:ResetMatch()
-					task.wait(3)
-				end
-			else
-				warn("Failed to start game:", promise)
-				self:ResetMatch()
-				task.wait(3)
-			end
-		end
+		self:GameLoop()
 	end)
 end
 
