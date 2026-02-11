@@ -15,7 +15,7 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 local IngameController = {
 	Name = script.Name,
-	LocalData = nil, -- [YENI] Yerel Veri Önbellegi (Cache)
+	LocalData = nil, -- [YENÄ°] Yerel Veri Ã–nbelleÄŸi (Cache)
 }
 
 --// UI UPDATE FUNCTIONS
@@ -31,7 +31,7 @@ function IngameController:UpdateCurrency()
 		local ShopFrame = Sidebar:WaitForChild("Shop")
 		local TokenLabel = ShopFrame:WaitForChild("TokenValue")
 
-		-- spr efekti eklenebilir (Token artinca yazi büyüyüp küçülür)
+		-- spr efekti eklenebilir (Token artÄ±nca yazÄ± bÃ¼yÃ¼yÃ¼p kÃ¼Ã§Ã¼lÃ¼r)
 		TokenLabel.Text = "Tokens: " .. FormatKit.FormatComma(amount)
 	end
 end
@@ -66,7 +66,7 @@ function IngameController:UpdateLevel()
 		local fillBar = LevelBar:FindFirstChild("FillBar")
 		if fillBar then
 			local percent = math.clamp(levelData.ValueXP / levelData.TargetXP, 0, 1)
-			-- spr ile yumusak geçis
+			-- spr ile yumuÅŸak geÃ§iÅŸ
 			spr.target(fillBar, 0.8, 2, {Size = UDim2.fromScale(percent, 1)})
 		end
 	end
@@ -75,17 +75,17 @@ end
 --// DATA HANDLING
 
 function IngameController:RefreshAllData()
-	-- 1. Tüm Veriyi Çek ve Cache'e Yaz
+	-- 1. TÃ¼m Veriyi Ã‡ek ve Cache'e Yaz
 	local Data = Net:Invoke("DataService/GetData") -- DataService.Client:GetData tetiklenir
 	if Data then
 		self.LocalData = Data
 
-		-- UI'lari Cache'den güncelle
+		-- UI'larÄ± Cache'den gÃ¼ncelle
 		self:UpdateCurrency()
 		self:UpdateLevel()
 	end
 
-	-- 2. Sans Verisini Çek
+	-- 2. Åžans Verisini Ã‡ek
 	local success, chance = pcall(function()
 		return Net:Invoke("PlayerService/GetChance")
 	end)
@@ -95,13 +95,13 @@ function IngameController:RefreshAllData()
 end
 
 function IngameController:OnStart()
-	-- UI Referanslari
+	-- UI ReferanslarÄ±
 	local IngameHUD = PlayerGui:WaitForChild("IngameHUD", 5)
 	if IngameHUD then
 		local Sidebar = IngameHUD:WaitForChild("SidebarContainer")
 		local LuckFrame = Sidebar:WaitForChild("LuckRatio")
 
-		-- Ürün Satin Alma
+		-- ÃœrÃ¼n SatÄ±n Alma
 		local promptBtn = LuckFrame:FindFirstChild("ProductPrompt")
 		if promptBtn then
 			promptBtn.Activated:Connect(function()
@@ -110,13 +110,13 @@ function IngameController:OnStart()
 		end
 	end
 
-	-- [GÜNCELLENMIS NETWORK] DataUpdate Sinyali
-	-- Sunucudan gelen: (Path, NewValue) -> Örn: ("CurrencyData.Value", 150)
+	-- [GÃœNCELLENMÄ°Åž NETWORK] DataUpdate Sinyali
+	-- Sunucudan gelen: (Path, NewValue) -> Ã–rn: ("CurrencyData.Value", 150)
 	Net:Connect("DataUpdate", function(Path, NewValue)
 		if not self.LocalData then return end
 
-		-- 1. Yerel Datayi Güncelle (Cache Update)
-		-- Gelen Path'i parçalayip yerel tabloyu güncelliyoruz
+		-- 1. Yerel DatayÄ± GÃ¼ncelle (Cache Update)
+		-- Gelen Path'i parÃ§alayÄ±p yerel tabloyu gÃ¼ncelliyoruz
 		if Path == "CurrencyData.Value" then
 			self.LocalData.CurrencyData.Value = NewValue
 			self:UpdateCurrency()
@@ -139,10 +139,10 @@ function IngameController:OnStart()
 		self:UpdateChance(NewChance)
 	end)
 
-	-- Ilk Yükleme
+	-- Ä°lk YÃ¼kleme
 	self:RefreshAllData()
 
-	-- Karakter Respawn Oldugunda UI'i Yenile
+	-- Karakter Respawn OlduÄŸunda UI'Ä± Yenile
 	LocalPlayer.CharacterAdded:Connect(function()
 		task.wait(0.5)
 		self:RefreshAllData()
