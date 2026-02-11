@@ -1,16 +1,18 @@
 -- Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
+local Players = game:GetService("Players")
 
 -- Variables
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Services = ServerStorage:WaitForChild("Services")
 local ShopAssets = Shared:WaitForChild("ShopAssets")
 
+-- Diğer servislerin doğru yüklendiğinden emin olun
 local DataService = require(Services:WaitForChild("DataService"))
 local MonetizationService = require(Services:WaitForChild("MonetizationService"))
 
--- ZORUNLU SLOTLAR: Bunlar Unequip edilemez, sadece değiştirilebilir.
+-- ZORUNLU SLOTLAR (Çıkarılamaz, sadece değiştirilebilir)
 local MANDATORY_SLOTS = {
 	["KillerSkin"] = true,
 }
@@ -21,7 +23,7 @@ local ShopService = {
 	ItemList = {} 
 }
 
---// Helper Functions
+--// Helper Functions (İç Mantık)
 
 function ShopService:ProcessPurchase(player, itemName)
 	local itemData = self.ItemList[itemName]
@@ -39,7 +41,11 @@ function ShopService:ProcessPurchase(player, itemName)
 
 	-- Para Kontrolü
 	local price = itemData.Price or 0
-	local currentMoney = profileData.CurrencyData.Value
+	local currentMoney = 0
+
+	if profileData.CurrencyData then
+		currentMoney = profileData.CurrencyData.Value
+	end
 
 	if currentMoney >= price then
 		-- 1. Parayı Düş
@@ -71,14 +77,18 @@ function ShopService:ProcessEquip(player, itemName)
 	local equipSlot = itemData.EquipSlot
 	if not equipSlot then return false, "Not equippable" end
 
-	local currentEquipped = profileData.Equippeds[equipSlot]
+	local currentEquipped = ""
+	if profileData.Equippeds then
+		currentEquipped = profileData.Equippeds[equipSlot]
+	end
+
 	local isMandatory = MANDATORY_SLOTS[equipSlot]
 
 	-- Mantık: Takılı olanla aynı mı?
 	if currentEquipped == itemName then
 		-- Zaten takılıysa
 		if isMandatory then
-			return false, "Cannot unequip base item!" -- Skin çıkarılamaz
+			return false, "Cannot unequip base item!" -- Skin çıkarılamaz, yerine başkası takılmalı
 		else
 			DataService:SetValue(player, "Equippeds." .. equipSlot, "") 
 			return true, "Unequipped"
@@ -100,7 +110,7 @@ function ShopService:UserHas(player, category, itemName)
 	return false
 end
 
---// Client Functions
+--// Client Functions (Client'tan Gelen İstekler)
 
 function ShopService.Client:Purchase(player, itemName)
 	return ShopService:ProcessPurchase(player, itemName)
@@ -115,31 +125,30 @@ function ShopService.Client:GetItemData(player, itemName)
 end
 
 function ShopService:OnStart()
+	-- Robux ile Token Satın Alımları (DevProducts)
+	-- ID'lerin MonetizationService veya Developer Dashboard ile eşleştiğinden emin olun.
+
 	-- 15000 Tokens
-	MonetizationService:Register(MonetizationService.Type.Product, 3530798246, function(Player : Player)
-		local Amount = 15000
-		DataService:UpdateValue(Player, "CurrencyData.Value", Amount)
+	MonetizationService:Register(MonetizationService.Type.Product, 3530798246, function(Player)
+		DataService:UpdateValue(Player, "CurrencyData.Value", 15000)
 	end)
 
 	-- 3500 Tokens
-	MonetizationService:Register(MonetizationService.Type.Product, 3530798247, function(Player : Player)
-		local Amount = 3500
-		DataService:UpdateValue(Player, "CurrencyData.Value", Amount)
+	MonetizationService:Register(MonetizationService.Type.Product, 3530798247, function(Player)
+		DataService:UpdateValue(Player, "CurrencyData.Value", 3500)
 	end)
 
 	-- 1500 Tokens
-	MonetizationService:Register(MonetizationService.Type.Product, 3530798248, function(Player : Player)
-		local Amount = 1500
-		DataService:UpdateValue(Player, "CurrencyData.Value", Amount)
+	MonetizationService:Register(MonetizationService.Type.Product, 3530798248, function(Player)
+		DataService:UpdateValue(Player, "CurrencyData.Value", 1500)
 	end)
 
 	-- 500 Tokens
-	MonetizationService:Register(MonetizationService.Type.Product, 3530798249, function(Player : Player)
-		local Amount = 500
-		DataService:UpdateValue(Player, "CurrencyData.Value", Amount)
+	MonetizationService:Register(MonetizationService.Type.Product, 3530798249, function(Player)
+		DataService:UpdateValue(Player, "CurrencyData.Value", 500)
 	end)
-	
-	-- Assets Yükleyici
+
+	-- Eşya Verilerini Yükle
 	for _, CategoryFolder in ipairs(ShopAssets:GetChildren()) do
 		for _, Item in ipairs(CategoryFolder:GetChildren()) do
 			if (Item:IsA("ModuleScript")) then
@@ -147,7 +156,7 @@ function ShopService:OnStart()
 				if (Success) then
 					self.ItemList[Item.Name] = ModuleData
 
-					-- Kategori Yaması (Eğer modülde yoksa klasör adını al)
+					-- Kategori Ataması (Otomatik)
 					if not ModuleData.Category and not ModuleData.DataCategory then
 						ModuleData.Category = CategoryFolder.Name
 					end
