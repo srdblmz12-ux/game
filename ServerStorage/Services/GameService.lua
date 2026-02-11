@@ -198,43 +198,9 @@ function GameService:_countKillers()
 	return count
 end
 
-function GameService:SelectWeightedKiller(playerCandidates)
-	local priorityList = {}
-	for _, player in ipairs(playerCandidates) do
-		if PlayerService:HasPriority(player) then
-			table.insert(priorityList, player)
-		end
-	end
-
-	if #priorityList > 0 then
-		local winnerPlayer = priorityList[math.random(1, #priorityList)]
-		PlayerService:RemovePriority(winnerPlayer)
-		return winnerPlayer
-	end
-
-	local totalChance = 0
-	local selectionPool = {}
-
-	for _, player in ipairs(playerCandidates) do
-		local chance = PlayerService:GetChance(player)
-		if chance <= 0 then chance = 1 end
-		totalChance = totalChance + chance
-		table.insert(selectionPool, {Player = player, Weight = totalChance})
-	end
-
-	local randomNumber = math.random(1, totalChance)
-	for _, poolEntry in ipairs(selectionPool) do
-		if randomNumber <= poolEntry.Weight then
-			return poolEntry.Player
-		end
-	end
-	return playerCandidates[1]
-end
-
 function GameService:SetNextMap(mapName)
-	local mapModule = MapService:FindMapModule(mapName)
-	if mapModule then
-		self.NextMapOverride(mapModule)
+	if MapService:IsValidMap(mapName) then
+		self.NextMapOverride(mapName)
 		return true
 	end
 	return false
@@ -368,20 +334,20 @@ function GameService:RunVotingPhase()
 	local winnerId = candidates[math.random(1, #candidates)]
 	local winnerModule = MapService:FindMapModule(winnerId)
 
-	if not winnerModule and #processedOptions > 0 then 
-		winnerModule = MapService:FindMapModule(processedOptions[1].Id) 
+	if not winnerId and #processedOptions > 0 then
+		winnerId = processedOptions[1].Id
 	end
 
-	return winnerModule
+	return winnerId
 end
 
-function GameService:_loadMapSafely(mapModule)
+function GameService:_loadMapSafely(mapName)
 	local retries = 0
 	local mapData = nil
 
 	while retries < CONFIG.MAX_MAP_LOAD_RETRIES do
 		local success, result = pcall(function() 
-			return MapService:LoadMap(mapModule) 
+			return MapService:LoadMap(mapName) 
 		end)
 
 		if success and result then
@@ -421,15 +387,15 @@ function GameService:StartGame()
 	self:_spawnWaitingRoom()
 
 	-- 1. Voting
-	local mapModule = self.NextMapOverride() or self:RunVotingPhase()
+	local mapName = self.NextMapOverride() or self:RunVotingPhase()
 	self.NextMapOverride(nil)
 
-	if self._votingCancelled or not mapModule then 
+	if self._votingCancelled or not mapName then 
 		self._isGameActive = false
 		return Promise.reject("Voting Cancelled") 
 	end
 
-	self.CurrentMapName = tostring(mapModule.Name) 
+	self.CurrentMapName = tostring(mapName.Name) 
 	self.GameStatus("Loading")
 
 	-- 2. Data Loading
