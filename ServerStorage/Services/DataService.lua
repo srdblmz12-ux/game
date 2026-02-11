@@ -34,7 +34,7 @@ local PROFILE_TEMPLATE = {
 	MurdererSkill = "Default"
 }
 
-local Store = ProfileStore.New(RunService:IsStudio() and "Test" or "Live1", PROFILE_TEMPLATE)
+local Store = ProfileStore.New(RunService:IsStudio() and "Test1" or "Live1", PROFILE_TEMPLATE)
 
 -- Service Definition
 local DataService = {
