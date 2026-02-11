@@ -6,12 +6,10 @@ local Workspace = game:GetService("Workspace")
 
 -- Variables
 local Packages = ReplicatedStorage:WaitForChild("Packages")
-local Controllers = ReplicatedStorage:WaitForChild("Controllers") -- [EKLENDİ]
+local Controllers = ReplicatedStorage:WaitForChild("Controllers")
 
 local Trove = require(Packages:WaitForChild("Trove"))
 local Net = require(Packages:WaitForChild("Net"))
-
--- [EKLENDİ] GameController'ı dahil ediyoruz
 local GameController = require(Controllers:WaitForChild("GameController"))
 
 -- References
@@ -28,15 +26,12 @@ local SpectateController = {
 	Trove = Trove.new(),
 }
 
---// YARDIMCI FONKSİYONLAR
+--// YARDIMCI FONKSIYONLAR
 
--- Canlı oyuncuları bul
 function SpectateController:GetValidTargets()
 	local targets = {}
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player == LocalPlayer then continue end
-
-		-- Karakteri, Humanoid'i ve HumanoidRootPart'ı var mı? Canlı mı?
 		local char = player.Character
 		if char and char:FindFirstChild("Humanoid") and char:FindFirstChild("HumanoidRootPart") and char.Humanoid.Health > 0 then
 			table.insert(targets, player)
@@ -45,71 +40,70 @@ function SpectateController:GetValidTargets()
 	return targets
 end
 
--- Arayüz ve Kamerayı Güncelle
 function SpectateController:UpdateView(Container)
-	-- Listeyi tazele
 	self.ValidTargets = self:GetValidTargets()
 
-	-- Kimse kalmadıysa kapat
 	if #self.ValidTargets == 0 then
 		self:StopSpectating(Container)
 		return
 	end
 
-	-- Index sınırlarını düzelt
 	if self.CurrentTargetIndex > #self.ValidTargets then self.CurrentTargetIndex = 1 end
 	if self.CurrentTargetIndex < 1 then self.CurrentTargetIndex = #self.ValidTargets end
 
 	local targetPlayer = self.ValidTargets[self.CurrentTargetIndex]
-	local ControllersUI = Container.Controllers -- İsim çakışmasını önlemek için değişken adını değiştirdim
 
-	-- 1. UI Bilgilerini Güncelle
-	ControllersUI.Username.Text = targetPlayer.DisplayName .. " (@" .. targetPlayer.Name .. ")"
-	ControllersUI.Role.Text = "Loading..."
+	-- UI G�NCELLEME KISMI
+	-- Hiyerarsi: SpectateContainer -> Controllers -> [Username, Role, NextButton, PreviousButton]
+	local ControllersUI = Container:FindFirstChild("Controllers")
+	if not ControllersUI then return end
 
-	-- 2. Rol Bilgisini Çek (Server'dan)
-	task.spawn(function()
-		-- Hata olursa patlamasın diye pcall veya güvenli çağrı yapıyoruz
-		local success, data = pcall(function() 
-			return Net:Invoke("GameService/GetPlayerData", targetPlayer.Name) 
-		end)
+	if ControllersUI:FindFirstChild("Username") then
+		ControllersUI.Username.Text = targetPlayer.DisplayName .. " (@" .. targetPlayer.Name .. ")"
+	end
 
-		if success and data and self.IsSpectating and self.ValidTargets[self.CurrentTargetIndex] == targetPlayer then
-			ControllersUI.Role.Text = data.Role or "Unknown"
+	if ControllersUI:FindFirstChild("Role") then
+		ControllersUI.Role.Text = "Loading..."
 
-			-- Rol Rengi
-			if data.Role == "Killer" then
-				ControllersUI.Role.TextColor3 = Color3.fromRGB(255, 50, 50)
-			elseif data.Role == "Survivor" then
-				ControllersUI.Role.TextColor3 = Color3.fromRGB(50, 255, 50)
-			else
-				ControllersUI.Role.TextColor3 = Color3.fromRGB(255, 255, 255)
+		task.spawn(function()
+			local success, data = pcall(function() 
+				return Net:Invoke("GameService/GetPlayerData", targetPlayer.Name) 
+			end)
+
+			if success and data and self.IsSpectating and self.ValidTargets[self.CurrentTargetIndex] == targetPlayer then
+				ControllersUI.Role.Text = data.Role or "Unknown"
+				if data.Role == "Killer" then
+					ControllersUI.Role.TextColor3 = Color3.fromRGB(255, 50, 50)
+				elseif data.Role == "Survivor" then
+					ControllersUI.Role.TextColor3 = Color3.fromRGB(50, 255, 50)
+				else
+					ControllersUI.Role.TextColor3 = Color3.fromRGB(255, 255, 255)
+				end
 			end
-		end
-	end)
+		end)
+	end
 end
 
--- Spectate Başlat
 function SpectateController:StartSpectating(Container)
 	if self.IsSpectating then return end
 
 	self.ValidTargets = self:GetValidTargets()
-
-	if #self.ValidTargets == 0 then
-		-- Kimse yoksa başlamadan dön
-		return 
-	end
+	if #self.ValidTargets == 0 then return end
 
 	self.IsSpectating = true
-
-	-- [YENİ] GameController'a izlemeye başladığımızı bildiriyoruz (HUD'ları gizleyecek)
 	GameController:SetSpectating(true)
-
 	self.CurrentTargetIndex = 1
 
-	-- UI Düzenlemesi
-	Container.SpectateButton.Title.Text = "Lobby"
-	Container.Controllers.Visible = true
+	-- UI A�
+	Container.Visible = true
+	local SpectateButton = Container:FindFirstChild("SpectateButton")
+	if SpectateButton and SpectateButton:FindFirstChild("Title") then
+		SpectateButton.Title.Text = "Lobby"
+	end
+
+	if Container:FindFirstChild("Controllers") then
+		Container.Controllers.Visible = true
+	end
 
 	self:UpdateView(Container)
 
@@ -121,7 +115,6 @@ function SpectateController:StartSpectating(Container)
 
 		local targetPlayer = self.ValidTargets[self.CurrentTargetIndex]
 
-		-- Hedef Geçersizse (Öldü/Çıktı) -> Değiştir
 		if not targetPlayer or not targetPlayer.Parent or 
 			not targetPlayer.Character or 
 			not targetPlayer.Character:FindFirstChild("Humanoid") or 
@@ -131,7 +124,6 @@ function SpectateController:StartSpectating(Container)
 			return
 		end
 
-		-- Kamerayı Hedefe Kilitle
 		local hum = targetPlayer.Character:FindFirstChild("Humanoid")
 		if hum then
 			Camera.CameraType = Enum.CameraType.Custom
@@ -140,25 +132,26 @@ function SpectateController:StartSpectating(Container)
 	end)
 end
 
--- Spectate Bitir
 function SpectateController:StopSpectating(Container)
 	self.IsSpectating = false
-
-	-- [YENİ] GameController'a izlemenin bittiğini bildiriyoruz (HUD'ları geri açacak - eğer ölüysek)
 	GameController:SetSpectating(false)
+	RunService:UnbindFromRenderStep("SpectateCam")
 
-	RunService:UnbindFromRenderStep("SpectateCam") -- Kamera döngüsünü durdur
-
-	-- Kamerayı kendine döndür
-	task.wait(0.1) -- Ufak bir gecikme ile çakışmayı önle
+	task.wait(0.1)
 	if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
 		Camera.CameraType = Enum.CameraType.Custom
 		Camera.CameraSubject = LocalPlayer.Character.Humanoid
 	end
 
-	-- UI Eski haline
-	Container.SpectateButton.Title.Text = "Spectate"
-	Container.Controllers.Visible = false
+	-- UI Kapat / Resetle
+	local SpectateButton = Container:FindFirstChild("SpectateButton")
+	if SpectateButton and SpectateButton:FindFirstChild("Title") then
+		SpectateButton.Title.Text = "Spectate"
+	end
+
+	if Container:FindFirstChild("Controllers") then
+		Container.Controllers.Visible = false
+	end
 end
 
 function SpectateController:NextTarget(Container)
@@ -172,114 +165,94 @@ function SpectateController:PrevTarget(Container)
 end
 
 function SpectateController:OnStart()
-	local HUD = PlayerGui:WaitForChild("GameStatusHUD")
-	local Container = HUD:WaitForChild("SpectateContainer")
-	local SpectateBtn = Container:WaitForChild("SpectateButton")
-	local ControllersUI = Container:WaitForChild("Controllers")
+	-- UI Nesnelerini G�venli Sekilde Bekle
+	local HUD = PlayerGui:WaitForChild("SpectateHUD", 10)
+	if not HUD then warn("SpectateHUD bulunamadi!") return end
+
+	local Container = HUD:WaitForChild("SpectateContainer", 10)
+	if not Container then warn("SpectateContainer bulunamadi!") return end
+
+	local SpectateBtn = Container:WaitForChild("SpectateButton", 5)
+	local ControllersUI = Container:WaitForChild("Controllers", 5)
+
+	-- Buton Isimlerini G�ncelledik: PreviousButton / NextButton
+	local PrevBtn = ControllersUI and ControllersUI:WaitForChild("PreviousButton", 5)
+	local NextBtn = ControllersUI and ControllersUI:WaitForChild("NextButton", 5)
 
 	Container.Visible = false
-	ControllersUI.Visible = false
+	if ControllersUI then ControllersUI.Visible = false end
 
-	-- [YENİ] Oyun Durumunu Takip Etmek İçin Değişken
 	local CurrentGameStatus = "Intermission"
 
-	-- Butonlar
-	SpectateBtn.Activated:Connect(function()
-		if self.IsSpectating then
-			self:StopSpectating(Container)
-		else
-			self:StartSpectating(Container)
-		end
-	end)
-
-	ControllersUI.LeftButton.Activated:Connect(function()
-		self:PrevTarget(Container)
-	end)
-
-	ControllersUI.RightButton.Activated:Connect(function()
-		self:NextTarget(Container)
-	end)
-
-	-- Görünürlük Kontrolü
-	local function CheckVisibility(isDeathEvent)
-		-- [ÖNEMLİ EKLEME] Eğer oyun aktif değilse (Intermission, Voting, Loading) butonu asla gösterme!
-		if CurrentGameStatus ~= "GameRunning" and CurrentGameStatus ~= "Warmup" then
-			Container.Visible = false
-
-			-- Eğer oyun bittiyse ve hala izliyorsak izlemeyi durdur
+	-- Event Baglantilari
+	if SpectateBtn then
+		SpectateBtn.Activated:Connect(function()
 			if self.IsSpectating then
 				self:StopSpectating(Container)
+			else
+				self:StartSpectating(Container)
 			end
+		end)
+	end
+
+	if PrevBtn then
+		PrevBtn.Activated:Connect(function() self:PrevTarget(Container) end)
+	end
+
+	if NextBtn then
+		NextBtn.Activated:Connect(function() self:NextTarget(Container) end)
+	end
+
+	local function CheckVisibility(isDeathEvent)
+		if CurrentGameStatus ~= "GameRunning" and CurrentGameStatus ~= "Warmup" then
+			Container.Visible = false
+			if self.IsSpectating then self:StopSpectating(Container) end
 			return
 		end
+
+		if isDeathEvent then task.wait(3.5) end
 
 		local char = LocalPlayer.Character
 		local hum = char and char:FindFirstChild("Humanoid")
 
-		-- 1. Eğer ölüm olayından geldiysek, bekleme süresi koy (Ölüm animasyonu ve farkındalık için)
-		if isDeathEvent then
-			task.wait(3.5) -- 3.5 Saniye bekle (Oyuncu öldüğünü anlasın)
-		end
-
-		-- 2. Tekrar kontrol et (Belki bu sürede respawn oldu?)
-		char = LocalPlayer.Character
-		hum = char and char:FindFirstChild("Humanoid")
-
-		-- 3. Karakter yoksa veya hala ölüyse -> GÖSTER (Ama sadece oyun devam ediyorsa)
 		if not hum or hum.Health <= 0 then
 			Container.Visible = true
 			return
 		end
 
-		-- 4. Yaşıyorsak Rol Kontrolü Yap (Lobi mi, Oyun mu?)
 		task.spawn(function()
 			local success, myData = pcall(function()
 				return Net:Invoke("GameService/GetPlayerData", LocalPlayer.Name)
 			end)
-
 			if success and myData and myData.Role == "Lobby" then
-				-- Lobideyiz (Elendik ve oyun hala devam ediyor) -> GÖSTER
 				Container.Visible = true
 			else
-				-- Oyundayız (Survivor/Killer) -> GİZLE
 				Container.Visible = false
-
-				-- Eğer yanlışlıkla spectate açıksa kapat
-				if self.IsSpectating then
-					self:StopSpectating(Container)
-				end
+				if self.IsSpectating then self:StopSpectating(Container) end
 			end
 		end)
 	end
 
-	-- [YENİ] StateUpdate Listener: Oyun durumunu takip et
 	Net:Connect("StateUpdate", function(State, Data)
 		if State == "GameStatus" then
 			CurrentGameStatus = Data
-			CheckVisibility(false) -- Durum değiştiğinde görünürlüğü tekrar kontrol et
+			CheckVisibility(false)
 		end
 	end)
 
-	-- Karakter Olayları
 	LocalPlayer.CharacterAdded:Connect(function(char)
-		CheckVisibility(false) -- Normal spawn, bekleme yok
-
+		CheckVisibility(false)
 		local hum = char:WaitForChild("Humanoid", 10)
 		if hum then
-			hum.Died:Connect(function()
-				CheckVisibility(true) -- Ölüm gerçekleşti, bekleme süresi uygula
-			end)
+			hum.Died:Connect(function() CheckVisibility(true) end)
 		end
 	end)
 
-	-- İlk Giriş Kontrolü
 	if LocalPlayer.Character then
 		CheckVisibility(false)
 		local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
 		if hum then
-			hum.Died:Connect(function()
-				CheckVisibility(true)
-			end)
+			hum.Died:Connect(function() CheckVisibility(true) end)
 		end
 	else
 		CheckVisibility(false)

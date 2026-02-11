@@ -2,12 +2,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 
--- Klasörler
+-- Klas�rler
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Common = ReplicatedStorage:WaitForChild("Common")
 local AnimatorAssets = Common:WaitForChild("AnimatorAssets")
 
--- Modüller
+-- Mod�ller
 local Trove = require(Packages:WaitForChild("Trove"))
 local ClassicAnimator = require(AnimatorAssets:WaitForChild("ClassicAnimator"))
 local Animator = require(AnimatorAssets:WaitForChild("Animator"))
@@ -16,17 +16,17 @@ local LocalPlayer = Players.LocalPlayer
 
 local AnimateController = {
 	Name = script.Name,
-	NPCTroves = {} -- Tag'li NPC'lerin Trove'larını tutacağımız liste
+	NPCTroves = {} -- Tag'li NPC'lerin Trove'larini tutacagimiz liste
 }
 
--- [YARDIMCI FONKSİYON] Animasyon Mantığı (Hem Player Hem NPC için ortak)
+-- [YARDIMCI FONKSIYON] Animasyon Mantigi (Hem Player Hem NPC i�in ortak)
 local function startAnimation(character, parentTrove)
-	-- Non-blocking olması için task.spawn içinde yapıyoruz (WaitForChild diğerlerini bekletmesin)
+	-- Non-blocking olmasi i�in task.spawn i�inde yapiyoruz (WaitForChild digerlerini bekletmesin)
 	task.spawn(function()
 		local humanoid = character:WaitForChild("Humanoid", 10)
 		if not humanoid then return end
 
-		-- 1. AnimationData Kontrolü
+		-- 1. AnimationData Kontrol�
 		local customDataModule = character:FindFirstChild("AnimationData")
 		local loadedModern = false
 
@@ -34,31 +34,31 @@ local function startAnimation(character, parentTrove)
 			local success, animData = pcall(require, customDataModule)
 
 			if success and type(animData) == "table" then
-				-- Modern Animasyon Sistemini Başlat
+				-- Modern Animasyon Sistemini Baslat
 				local runner = Animator.new(humanoid, animData)
 				parentTrove:Add(runner)
 				loadedModern = true
-				-- print(character.Name .. " için Modern Animator yüklendi.")
+				-- print(character.Name .. " i�in Modern Animator y�klendi.")
 			else
-				warn(character.Name .. ": AnimationData hatalı, Classic moda geçiliyor.")
+				warn(character.Name .. ": AnimationData hatali, Classic moda ge�iliyor.")
 			end
 		end
 
-		-- 2. Eğer Modern yüklenmediyse Classic Animator'ü Başlat
+		-- 2. Eger Modern y�klenmediyse Classic Animator'� Baslat
 		if not loadedModern then
-			-- ClassicAnimator'e Karakteri ve Trove'u gönderiyoruz
+			-- ClassicAnimator'e Karakteri ve Trove'u g�nderiyoruz
 			ClassicAnimator:OnStart(character, parentTrove)
-			-- print(character.Name .. " için Classic Animator yüklendi.")
+			-- print(character.Name .. " i�in Classic Animator y�klendi.")
 		end
 	end)
 end
 
 function AnimateController:OnStart()
-	-- :: 1. LOCAL PLAYER YÖNETİMİ ::
+	-- :: 1. LOCAL PLAYER Y�NETIMI ::
 	local playerTrove = Trove.new()
 
 	local function onLocalCharacterAdded(character)
-		playerTrove:Clean() -- Önceki karakterden kalanları temizle
+		playerTrove:Clean() -- �nceki karakterden kalanlari temizle
 		startAnimation(character, playerTrove)
 	end
 
@@ -71,19 +71,19 @@ function AnimateController:OnStart()
 		playerTrove:Clean()
 	end)
 
-	-- :: 2. COLLECTION SERVICE (NPC) YÖNETİMİ ::
+	-- :: 2. COLLECTION SERVICE (NPC) Y�NETIMI ::
 
 	local function onInstanceAdded(instance)
-		-- Zaten yönetiliyorsa atla
+		-- Zaten y�netiliyorsa atla
 		if self.NPCTroves[instance] then return end
 
 		local npcTrove = Trove.new()
 		self.NPCTroves[instance] = npcTrove
 
-		-- Animasyonu başlat
+		-- Animasyonu baslat
 		startAnimation(instance, npcTrove)
 
-		-- Instance silinirse (Workspace'ten düşerse/yok olursa) temizlik yap
+		-- Instance silinirse (Workspace'ten d�serse/yok olursa) temizlik yap
 		npcTrove:Connect(instance.AncestryChanged, function(_, parent)
 			if not parent then
 				if self.NPCTroves[instance] then
@@ -101,7 +101,7 @@ function AnimateController:OnStart()
 		end
 	end
 
-	-- Var olanları al
+	-- Var olanlari al
 	for _, instance in ipairs(CollectionService:GetTagged("Animate")) do
 		onInstanceAdded(instance)
 	end

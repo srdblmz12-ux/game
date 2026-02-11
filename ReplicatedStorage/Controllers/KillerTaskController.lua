@@ -17,14 +17,14 @@ local KillerTaskController = {
 }
 
 function KillerTaskController:OnStart()
-	-- UI'ın hazır olduğundan emin olalım (Timeout eklemek iyidir)
+	-- UI'in hazir oldugundan emin olalim (Timeout eklemek iyidir)
 	local KillerHUD = PlayerGui:WaitForChild("KillerHUD", 10)
-	if not KillerHUD then warn("KillerHUD bulunamadı!") return end
+	if not KillerHUD then warn("KillerHUD bulunamadi!") return end
 
-	local Container = KillerHUD:WaitForChild("Container")
+	local Container = KillerHUD:WaitForChild("Main")
 	local TimerText = Container:FindFirstChild("Timer")
 
-	-- Timer'ı başlangıçta süresiz oluşturuyoruz, sonradan set edeceğiz
+	-- Timer'i baslangi�ta s�resiz olusturuyoruz, sonradan set edecegiz
 	local SpawnTimer = TimerKit.NewTimer(0) 
 
 	SpawnTimer.OnTick:Connect(function(_, Remaining)
@@ -33,21 +33,21 @@ function KillerTaskController:OnStart()
 		end
 	end)
 
-	-- Timer bittiğinde veya durduğunda
+	-- Timer bittiginde veya durdugunda
 	SpawnTimer.Completed:Connect(function()
 		KillerHUD.Enabled = false
 	end)
 
-	-- 1. EVENT: Warmup Başladığında (Server veriyi buraya atıyor)
+	-- 1. EVENT: Warmup Basladiginda (Server veriyi buraya atiyor)
 	Net:Connect("WarmupStarted", function(Gamemode, RunningPlayers, Duration)
 		local myId = tostring(LocalPlayer.UserId)
 		local myRole = RunningPlayers[myId]
 
-		-- Sadece KILLER ise bu ekranı göster
+		-- Sadece KILLER ise bu ekrani g�ster
 		if myRole == "Killer" then
 			KillerHUD.Enabled = true
 
-			-- Server'dan gelen doğru süreyi ayarla ve başlat
+			-- Server'dan gelen dogru s�reyi ayarla ve baslat
 			SpawnTimer:AdjustDuration(Duration) 
 			SpawnTimer:Start()
 		else
@@ -56,10 +56,10 @@ function KillerTaskController:OnStart()
 		end
 	end)
 
-	-- 2. EVENT: Oyun Durumu Değiştiğinde (Garanti Kapatma)
+	-- 2. EVENT: Oyun Durumu Degistiginde (Garanti Kapatma)
 	Net:Connect("StateUpdate", function(State, Data)
 		if State == "GameStatus" then
-			-- Eğer Warmup bittiyse (GameRunning, Intermission vs.) HUD'ı kapat
+			-- Eger Warmup bittiyse (GameRunning, Intermission vs.) HUD'i kapat
 			if Data ~= "Warmup" then
 				KillerHUD.Enabled = false
 				SpawnTimer:Stop()

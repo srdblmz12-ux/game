@@ -2,200 +2,258 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local ContentProvider = game:GetService("ContentProvider")
 
 -- Variables
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Common = ReplicatedStorage:WaitForChild("Common")
-local Interface = Common:WaitForChild("Interface")
-local MapAssets = Interface:WaitForChild("MapAssets") -- MapCard burada olmalı
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Assets = Common:WaitForChild("Interface"):WaitForChild("MapAssets") -- Kart Prefab'i burada
 
-local FormatKit = require(Packages:WaitForChild("FormatKit"))
-local TimerKit = require(Packages:WaitForChild("TimerKit"))
+local MapModulesFolder = Shared:WaitForChild("MapAssets") -- Harita mod�lleri (Resim vs. i�in)
+
+-- Dependencies
 local Net = require(Packages:WaitForChild("Net"))
+local Trove = require(Packages:WaitForChild("Trove"))
 
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-
+-- Controller
 local VotingController = {
 	Name = "VotingController",
-	CurrentMaps = {},
-	CurrentVotes = {},
+
+	-- State
+	CurrentMaps = {}, -- { [MapName] = CardInstance }
 	SelectedMap = nil,
+	_trove = nil, -- Temizlik i�in
+
+	-- UI Refs
 	HUD = nil,
 	Container = nil,
+
+	-- Network Events (Server'daki VotingService ile konusur)
+	Events = {
+		SetOptions = Net:RemoteEvent("SetOptions"),
+		UpdateVotes = Net:RemoteEvent("UpdateVotes"),
+		SubmitVote = Net:RemoteEvent("SubmitVote"),
+		GameStarted = Net:RemoteEvent("GameStarted")
+	}
 }
 
--- UI Animasyonları
-local function PlayHoverAnimation(card, isHovering)
-	local targetScale = isHovering and 1.05 or 1.0
-	TweenService:Create(card.Scale, TweenInfo.new(0.2), {Scale = targetScale}):Play()
+-- =============================================================================
+--  CORE LOGIC
+-- =============================================================================
+
+function VotingController:Start()
+	print("[VotingController] Baslatiliyor...")
+
+	local Player = Players.LocalPlayer
+	local PlayerGui = Player:WaitForChild("PlayerGui")
+
+	-- HUD'u bul (Ismi MapVotingHUD olmali)
+	self.HUD = PlayerGui:WaitForChild("MapVotingHUD", 10)
+	if not self.HUD then
+		warn("[VotingController] MapVotingHUD bulunamadi! L�tfen StarterGui'yi kontrol et.")
+		return
+	end
+
+	-- Kartlarin konulacagi Container'i bul
+	-- Genelde: HUD -> Background -> Container
+	self.Container = self.HUD:FindFirstChild("Container", true) -- Recursive arama yapar
+	if not self.Container then
+		warn("[VotingController] 'Container' isimli Frame bulunamadi!")
+		return
+	end
+
+	-- Baslangi�ta gizle
+	self:SetVisible(false)
+
+	-- Eventleri Dinle
+	self:ConnectNetwork()
 end
 
-local function PlaySelectAnimation(card, isSelected)
-	local border = card:FindFirstChild("UIStroke")
-	if border then
-		local targetColor = isSelected and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(255, 255, 255)
-		local targetThickness = isSelected and 4 or 2
-		TweenService:Create(border, TweenInfo.new(0.3), {Color = targetColor, Thickness = targetThickness}):Play()
+function VotingController:ConnectNetwork()
+	-- 1. OYLAMA BASLADI (Se�enekler Geldi)
+	self.Events.SetOptions.OnClientEvent:Connect(function(mapNamesArray)
+		self:SetupVotingSession(mapNamesArray)
+	end)
+
+	-- 2. OYLAR G�NCELLENDI
+	self.Events.UpdateVotes.OnClientEvent:Connect(function(votesTable)
+		self:UpdateVoteCounts(votesTable)
+	end)
+
+	-- 3. OYUN BASLADI (Oylama bitti)
+	self.Events.GameStarted.OnClientEvent:Connect(function()
+		self:SetVisible(false)
+		self:ClearCards()
+	end)
+end
+
+-- =============================================================================
+--  UI MANAGEMENT
+-- =============================================================================
+
+function VotingController:SetupVotingSession(mapNames)
+	self:ClearCards()
+	self._trove = Trove.new()
+	self.SelectedMap = nil
+	self:SetVisible(true)
+
+	print("[VotingController] Se�enekler:", table.concat(mapNames, ", "))
+
+	for index, mapName in ipairs(mapNames) do
+		-- Harita Mod�l�nden Veriyi �ek (Resim vs. i�in)
+		local mapInfo = self:GetMapInfo(mapName)
+
+		-- Karti Olustur
+		self:CreateCard(mapName, mapInfo, index)
 	end
 end
 
--- Harita Kartı Oluşturma
-function VotingController:CreateMapCard(mapData)
-	local cardPrefab = MapAssets:FindFirstChild("MapCard")
-	if not cardPrefab then 
-		warn("VotingController: MapCard prefab not found in Common/Interface/MapAssets")
-		return 
-	end
+function VotingController:CreateCard(mapName, mapInfo, layoutOrder)
+	local cardPrefab = Assets:FindFirstChild("MapCard")
+	if not cardPrefab then return end
 
 	local card = cardPrefab:Clone()
-	card.Name = mapData.Name
-	card.LayoutOrder = mapData.Index or 0
+	card.Name = mapName
+	card.LayoutOrder = layoutOrder
+	card.Parent = self.Container
 
-	-- Verileri Doldur
-	local mapNameLabel = card:FindFirstChild("MapName")
-	local voteCountLabel = card:FindFirstChild("VoteCount")
-	local mapImage = card:FindFirstChild("Image")
-	local button = card:FindFirstChild("Button") -- Tıklanabilir alan
+	-- Trove ile takip et (Otomatik silmek i�in)
+	self._trove:Add(card)
+	self.CurrentMaps[mapName] = card
 
-	if mapNameLabel then mapNameLabel.Text = mapData.Name end
-	if voteCountLabel then voteCountLabel.Text = "0 Votes" end
+	-- UI Verilerini Doldur
+	local nameLabel = card:FindFirstChild("MapName", true) -- Recursive bul
+	local imageLabel = card:FindFirstChild("Image", true)
+	local voteLabel = card:FindFirstChild("VoteCount", true)
+	local button = card:FindFirstChild("Button", true) or card -- Button yoksa kartin kendisi buton olsun
 
-	if mapImage and mapData.ImageId then
-		mapImage.Image = "rbxassetid://" .. mapData.ImageId
+	if nameLabel then nameLabel.Text = mapName end
+	if voteLabel then voteLabel.Text = "0" end
+
+	-- Resmi Ayarla
+	if imageLabel and mapInfo and mapInfo.Image then
+		imageLabel.Image = mapInfo.Image
+	elseif imageLabel then
+		imageLabel.Image = "" -- Resim yoksa bosalt
 	end
 
-	-- Scale objesi ekle (Animasyon için)
-	if not card:FindFirstChild("Scale") then
-		local scale = Instance.new("UIScale")
-		scale.Name = "Scale"
-		scale.Parent = card
-	end
-
-	-- Tıklama Olayı
-	if button then
-		button.Activated:Connect(function()
-			self:CastVote(mapData.Name)
+	-- Tiklama Islemi
+	if button and button:IsA("GuiButton") then
+		self._trove:Connect(button.Activated, function()
+			self:CastVote(mapName)
 		end)
 
-		button.MouseEnter:Connect(function() PlayHoverAnimation(card, true) end)
-		button.MouseLeave:Connect(function() PlayHoverAnimation(card, false) end)
-	end
-
-	card.Parent = self.Container
-	self.CurrentMaps[mapData.Name] = card
-end
-
--- Oy Verme İşlemi
-function VotingController:CastVote(mapName)
-	if self.SelectedMap == mapName then return end -- Zaten buna oy verdik
-
-	self.SelectedMap = mapName
-
-	-- Sunucuya bildir
-	Net:RemoteEvent("SubmitVote"):FireServer(mapName)
-
-	-- Görsel Geri Bildirim
-	for name, card in pairs(self.CurrentMaps) do
-		PlaySelectAnimation(card, name == mapName)
+		-- Hover Efektleri
+		self._trove:Connect(button.MouseEnter, function()
+			self:PlayHoverAnim(card, true)
+		end)
+		self._trove:Connect(button.MouseLeave, function()
+			self:PlayHoverAnim(card, false)
+		end)
 	end
 end
 
--- Oyları Güncelleme
-function VotingController:UpdateVotes(votesData)
-	self.CurrentVotes = votesData
+function VotingController:UpdateVoteCounts(votesTable)
+	-- �nce saya�lari sifirla
+	local counts = {}
+	for mapName, _ in pairs(self.CurrentMaps) do
+		counts[mapName] = 0
+	end
 
-	for mapName, count in pairs(votesData) do
+	-- Oylari say
+	for _, votedMap in pairs(votesTable) do
+		if counts[votedMap] then
+			counts[votedMap] += 1
+		end
+	end
+
+	-- Textleri g�ncelle
+	for mapName, count in pairs(counts) do
 		local card = self.CurrentMaps[mapName]
 		if card then
-			local label = card:FindFirstChild("VoteCount")
+			local label = card:FindFirstChild("VoteCount", true)
 			if label then
-				label.Text = count .. " Votes"
+				label.Text = tostring(count)
 			end
 		end
 	end
 end
 
--- Arayüzü Göster/Gizle
-function VotingController:SetVisible(state)
-	if self.HUD then
-		self.HUD.Enabled = state
+function VotingController:CastVote(mapName)
+	if self.SelectedMap == mapName then return end
+
+	self.SelectedMap = mapName
+
+	-- Server'a g�nder
+	self.Events.SubmitVote:FireServer(mapName)
+
+	-- G�rsel se�im efekti
+	for name, card in pairs(self.CurrentMaps) do
+		self:PlaySelectAnim(card, name == mapName)
 	end
 end
 
-function VotingController:OnStart()
-	-- HUD Referansı
-	self.HUD = PlayerGui:WaitForChild("MapVotingHUD", 10)
-	if not self.HUD then
-		warn("VotingController: MapVotingHUD not found in PlayerGui!")
-		return
-	end
+-- =============================================================================
+--  HELPERS & ANIMATIONS
+-- =============================================================================
 
-	-- Kartların Konulacağı Alan (Container)
-	-- Genelde HUD -> Container veya HUD -> Background -> MapsContainer şeklindedir.
-	-- Eğer bulamazsanız burayı UI hiyerarşinize göre düzeltin.
-	self.Container = self.HUD:FindFirstChild("VotingContainer") or self.HUD:FindFirstChild("Background") and self.HUD.Background:FindFirstChild("Container")
-
-	if not self.Container then
-		warn("VotingController: Container not found in MapVotingHUD")
-	end
-
-	local TimerLabel = self.HUD:FindFirstChild("Timer")
-
-	-- Zamanlayıcı
-	local VoteTimer = TimerKit.NewTimer(1)
-	VoteTimer.OnTick:Connect(function(_, remaining)
-		if TimerLabel then
-			TimerLabel.Text = FormatKit.FormatTime(remaining, "m:ss")
+function VotingController:GetMapInfo(mapName)
+	-- Shared/MapAssets i�indeki ModuleScript'i require et
+	local module = MapModulesFolder:FindFirstChild(mapName)
+	if module and module:IsA("ModuleScript") then
+		local success, data = pcall(require, module)
+		if success then
+			return data
 		end
-	end)
+	end
+	return nil
+end
 
-	-- NETWORK LISTENERS --
+function VotingController:SetVisible(isVisible)
+	if self.HUD then
+		self.HUD.Enabled = isVisible
+	end
+end
 
-	-- 1. Oylama Başladı (Haritalar Geldi)
-	Net:Connect("VoteOptions", function(mapsList, duration)
-		if not self.Container then return end
+function VotingController:ClearCards()
+	if self._trove then
+		self._trove:Destroy()
+		self._trove = nil
+	end
+	self.CurrentMaps = {}
 
-		-- Eski kartları temizle
+	-- Container i�ini manuel de temizle (Trove ka�irirsa diye)
+	if self.Container then
 		for _, child in ipairs(self.Container:GetChildren()) do
 			if child:IsA("GuiObject") then child:Destroy() end
 		end
-		self.CurrentMaps = {}
-		self.SelectedMap = nil
+	end
+end
 
-		-- Yeni kartları oluştur
-		for i, mapData in ipairs(mapsList) do
-			mapData.Index = i -- Sıralama için
-			self:CreateMapCard(mapData)
-		end
+function VotingController:PlayHoverAnim(card, isHovering)
+	local scale = card:FindFirstChild("UIScale")
+	if not scale then 
+		scale = Instance.new("UIScale")
+		scale.Name = "UIScale"
+		scale.Parent = card
+	end
 
-		-- Zamanlayıcıyı başlat
-		VoteTimer:Stop()
-		VoteTimer:AdjustDuration(duration or 15)
-		VoteTimer:Start()
+	local target = isHovering and 1.05 or 1.0
+	TweenService:Create(scale, TweenInfo.new(0.2), {Scale = target}):Play()
+end
 
-		-- UI Aç
-		self:SetVisible(true)
-	end)
+function VotingController:PlaySelectAnim(card, isSelected)
+	local stroke = card:FindFirstChild("UIStroke")
+	if not stroke then return end -- UIStroke yoksa yapma
 
-	-- 2. Oylar Güncellendi
-	Net:Connect("UpdateVotes", function(newVotes)
-		self:UpdateVotes(newVotes)
-	end)
+	local targetColor = isSelected and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(255, 255, 255)
+	local targetThickness = isSelected and 4 or 1
 
-	-- 3. Oylama Bitti / Oyun Başladı
-	Net:Connect("GameStarted", function()
-		VoteTimer:Stop()
-		self:SetVisible(false)
-	end)
-
-	Net:Connect("WarmupStarted", function()
-		VoteTimer:Stop()
-		self:SetVisible(false)
-	end)
-
-	-- Başlangıçta gizle
-	self:SetVisible(false)
+	TweenService:Create(stroke, TweenInfo.new(0.3), {
+		Color = targetColor,
+		Thickness = targetThickness
+	}):Play()
 end
 
 return VotingController

@@ -33,13 +33,13 @@ local GameStateName = {
 	["SurvivorsWin"] = "Survivors won!"
 }
 
--- HUD GÃ¶rÃ¼nÃ¼rlÃ¼ÄŸÃ¼nÃ¼ Kontrol Eden Fonksiyon
+-- HUD Görünürlügünü Kontrol Eden Fonksiyon
 function GameController:UpdateInterfaceVisibility()
 	local LevelHUD = PlayerGui:FindFirstChild("LevelHUD")
 	local IngameHUD = PlayerGui:FindFirstChild("IngameHUD") 
 	local PopupHUD = PlayerGui:FindFirstChild("PopupHUD")
 
-	-- GameStateHUD elementlerini de duruma gÃ¶re aÃ§Ä±p kapatacaÄŸÄ±z
+	-- GameStateHUD elementlerini de duruma göre açip kapatacagiz
 	local GameStateHUD = PlayerGui:FindFirstChild("GameStateHUD")
 
 	local isGameActive = (self._currentStatus == "Warmup" or self._currentStatus == "GameRunning")
@@ -47,35 +47,35 @@ function GameController:UpdateInterfaceVisibility()
 	local isVoting = (self._currentStatus == "OnVoting")
 	local isSpectating = self._isSpectating
 
-	-- MenÃ¼lerin gizlenmesi gereken durumlar
+	-- Menülerin gizlenmesi gereken durumlar
 	local shouldHideMenus = isVoting or isActiveParticipant or isSpectating
 
 	if LevelHUD then LevelHUD.Enabled = not shouldHideMenus end
 	if IngameHUD then IngameHUD.Enabled = not shouldHideMenus end
 	if PopupHUD then PopupHUD.Enabled = not shouldHideMenus end
 
-	-- GameStateHUD kontrolÃ¼
+	-- GameStateHUD kontrolü
 	if GameStateHUD then
 		local Timer = GameStateHUD:FindFirstChild("Timer")
 		local SurvivorCount = GameStateHUD:FindFirstChild("SurvivorCount")
 		local MapGamemode = GameStateHUD:FindFirstChild("MapGamemode")
 		local GameState = GameStateHUD:FindFirstChild("GameState")
 
-		-- Genel HUD aÃ§Ä±k olsun
+		-- Genel HUD açik olsun
 		GameStateHUD.Enabled = true
 
 		if Timer then 
-			-- Sadece oyunla ilgili zamanlarda gÃ¶ster
+			-- Sadece oyunla ilgili zamanlarda göster
 			Timer.Visible = (self._currentStatus ~= "Intermission" and self._currentStatus ~= "Loading")
 		end
 
 		if SurvivorCount then
-			-- Sadece oyun aktifken gÃ¶ster
+			-- Sadece oyun aktifken göster
 			SurvivorCount.Visible = (self._currentStatus == "GameRunning" or self._currentStatus == "Warmup")
 		end
 
 		if MapGamemode then
-			-- Intermission hariÃ§ gÃ¶ster
+			-- Intermission hariç göster
 			MapGamemode.Visible = (self._currentStatus ~= "Intermission")
 		end
 
@@ -98,13 +98,13 @@ function GameController:UpdateMapModeText(HUD)
 end
 
 function GameController:OnStart()
-	-- UI Elementlerini TanÄ±mla (Direct Children olarak)
+	-- UI Elementlerini Tanimla (Direct Children olarak)
 	local GameStateHUD = PlayerGui:WaitForChild("GameStateHUD")
 	local TimerLabel = GameStateHUD:WaitForChild("Timer")
 	local GameStateLabel = GameStateHUD:WaitForChild("GameState")
 	local SurvivorCountLabel = GameStateHUD:WaitForChild("SurvivorCount")
 
-	-- ZamanlayÄ±cÄ± AyarlarÄ±
+	-- Zamanlayici Ayarlari
 	local Timer = TimerKit.NewTimer(1)
 	Timer.OnTick:Connect(function(_, Remaining : number)
 		local displayTime = math.max(0, Remaining)
@@ -115,7 +115,7 @@ function GameController:OnStart()
 		end
 	end)
 
-	-- Karakter Ã¶ldÃ¼ÄŸÃ¼nde arayÃ¼zÃ¼ gÃ¼ncelle
+	-- Karakter öldügünde arayüzü güncelle
 	local function MonitorCharacter(char)
 		local hum = char:WaitForChild("Humanoid", 10)
 		if hum then
@@ -138,7 +138,7 @@ function GameController:OnStart()
 			local NewText = GameStateName[Data] or Data
 			GameStateLabel.Text = NewText
 
-			-- Durum deÄŸiÅŸtiÄŸinde animasyon veya gÃ¶rÃ¼nÃ¼rlÃ¼k ayarÄ± yapÄ±labilir
+			-- Durum degistiginde animasyon veya görünürlük ayari yapilabilir
 			GameStateLabel.Visible = true
 
 		elseif (State == "TimeLeft") then
@@ -159,7 +159,7 @@ function GameController:OnStart()
 		end
 	end)
 
-	-- Harita YÃ¼klendiÄŸinde Ä°smi GÃ¼ncelle
+	-- Harita Yüklendiginde Ismi Güncelle
 	Net:Connect("MapLoaded", function(mapName)
 		self._currentMapName = mapName or "Unknown"
 		self:UpdateMapModeText(GameStateHUD)
@@ -168,7 +168,7 @@ function GameController:OnStart()
 	-- WARMUP STARTED
 	Net:Connect("WarmupStarted", function(Mode, Roles, Time)
 		self._currentStatus = "Warmup"
-		self._currentGamemode = Mode -- Mod bilgisini gÃ¼ncelle
+		self._currentGamemode = Mode -- Mod bilgisini güncelle
 		self:UpdateMapModeText(GameStateHUD)
 
 		Timer:Stop()
@@ -215,7 +215,7 @@ function GameController:OnStart()
 		self:UpdateInterfaceVisibility()
 	end)
 
-	-- BaÅŸlangÄ±Ã§ta GÃ¶rÃ¼nÃ¼rlÃ¼ÄŸÃ¼ Ayarla
+	-- Baslangiçta Görünürlügü Ayarla
 	self:UpdateInterfaceVisibility()
 end
 
