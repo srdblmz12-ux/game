@@ -42,8 +42,78 @@ local PerkService = {
 }
 
 --// Client Bridge
+
 function PerkService.Client:GetPerks(Player : Player)
 	return PerkService:GetPerks()
+end
+
+function PerkService.Client:GetSelectedPerks(Player : Player)
+	local playerPerks = PerkService.PlayerPerks[Player] or {}
+	local safeList = {}
+
+	-- Client'a sadece gönderilebilir verileri (String, Number, Bool) aktarıyoruz.
+	-- Trove veya Fonksiyonları göndermeye çalışırsak hata alırız veya nil gider.
+	for _, perkData in ipairs(playerPerks) do
+		table.insert(safeList, {
+			Name = perkData.Name,
+			Id = perkData.Id or perkData.Name,
+			Description = perkData.Description,
+			Image = perkData.Image
+		})
+	end
+
+	return safeList
+end
+
+function PerkService.Client:GetPerkById(Player : Player, PerkId : string)
+	local playerPerks = PerkService.PlayerPerks[Player]
+	if not playerPerks then return nil end
+
+	for _, perkData in ipairs(playerPerks) do
+		-- Hem Name hem Id kontrolü yapıyoruz (genelde aynıdır ama garanti olsun)
+		if perkData.Name == PerkId or perkData.Id == PerkId then
+			return {
+				Name = perkData.Name,
+				Id = perkData.Id or perkData.Name,
+				Description = perkData.Description,
+				Image = perkData.Image
+			}
+		end
+	end
+
+	return nil
+end
+
+function PerkService.Client:GetPerkByTool(Player : Player, Tool : Tool?)
+	local targetTool = Tool
+
+	-- Eğer Tool parametresi gönderilmediyse, karakterin elindeki Tool'a bak
+	if not targetTool then
+		local character = Player.Character
+		if character then
+			targetTool = character:FindFirstChildWhichIsA("Tool")
+		end
+	end
+
+	-- Hala tool yoksa işlem yapamayız
+	if not targetTool then return nil end
+
+	local playerPerks = PerkService.PlayerPerks[Player]
+	if not playerPerks then return nil end
+
+	-- Oyuncunun perklerini gez ve Tool eşleşmesi ara
+	for _, perkData in ipairs(playerPerks) do
+		if perkData.Tool == targetTool then
+			return {
+				Name = perkData.Name,
+				Id = perkData.Id or perkData.Name,
+				Description = perkData.Description,
+				Image = perkData.Image
+			}
+		end
+	end
+
+	return nil
 end
 
 function PerkService.Client:SelectPerk(Player : Player, PerkName : string)
@@ -222,22 +292,49 @@ function PerkService:GivePerk(Player : Player, API : any)
 		Name = NewAPI.Name,
 		Id = NewAPI.Id
 	})
-
-	-- Eğer bu perkin bir temizlenme/destroy mantığı varsa Trove'a eklenmeli
-	-- Şimdilik manuel RemovePerk çağrılana kadar listede kalır.
 end
 
-function PerkService:RemovePerk(Player : Player)
+-- Spesifik bir perki silme fonksiyonu
+function PerkService:RemovePerk(Player : Player, PerkName : string)
 	local perkList = self.PlayerPerks[Player]
-	if perkList then
-		-- Hepsini temizle
-		for _, perkData in ipairs(perkList) do
+	if not perkList then return end
+
+	for i, perkData in ipairs(perkList) do
+		if perkData.Name == PerkName then
+			-- 1. Trove'u temizle (Varsa Tool'u da yok eder, eventleri koparır)
 			if perkData.Trove then
 				perkData.Trove:Destroy()
 			end
+
+			-- 2. Listeden kaydı sil
+			table.remove(perkList, i)
+
+			-- 3. Eğer liste boşaldıysa oyuncu kaydını nil yap
+			if #perkList == 0 then
+				self.PlayerPerks[Player] = nil
+			end
+
+			-- 4. Client'a "Bu perki sil" bilgisini gönder
+			-- Not: Client tarafında bu yapıyı karşılayacak düzenlemeyi aşağıda yapacağız.
+			self.Network.PerkAssigned:FireClient(Player, {
+				Name = PerkName,
+				Remove = true -- Bu bayrak (flag) silme işlemi olduğunu belirtir
+			})
+
+			break
 		end
-		self.PlayerPerks[Player] = nil
-		self.Network.PerkAssigned:FireClient(Player, nil)
+	end
+end
+
+-- Tüm perkleri silme (Örn: Oyuncu öldüğünde veya oyun bittiğinde)
+function PerkService:RemoveAllPerks(Player : Player)
+	local perkList = self.PlayerPerks[Player]
+	if perkList then
+		-- Listeyi kopyalayıp döngüye sokuyoruz, çünkü döngü içinde remove yapacağız
+		local listClone = table.clone(perkList)
+		for _, perkData in ipairs(listClone) do
+			self:RemovePerk(Player, perkData.Name)
+		end
 	end
 end
 
@@ -259,9 +356,6 @@ function PerkService:GiveMurdererPerk(Player : Player)
 
 		local api = self.CachedPerks.MurdererPerks[KillerSkillName]
 		if api then
-			-- Eğer Murderer skilli tool ise GivePerkTool, değilse GivePerk kullan
-			-- Genelde murderer skilleri tool olur (bıçak/yetenek), ama duruma göre değişir.
-			-- Şimdilik Tool varsayıyoruz:
 			self:GivePerkTool(Player, api)
 		else
 			warn(`Murderer perk not found: {KillerSkillName}`)
@@ -295,7 +389,7 @@ function PerkService:OnStart()
 
 	-- Perk Controller
 	Players.PlayerRemoving:Connect(function(Player : Player)
-		self:RemovePerk(Player)
+		self:RemoveAllPerks(Player)
 	end)
 
 	-- Tool Olmayan Perkleri Tetikleme (Remote Event ile)
