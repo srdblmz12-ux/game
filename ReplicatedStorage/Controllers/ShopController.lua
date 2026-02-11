@@ -9,7 +9,7 @@ local Common = ReplicatedStorage:WaitForChild("Common")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Interface = Common:WaitForChild("Interface")
 
--- ShopAssets (UI Prefablari)
+-- ShopAssets (UI Prefabları)
 local UIShopAssets = Interface:WaitForChild("ShopAssets")
 local ShopAssets = Shared:WaitForChild("ShopAssets")
 
@@ -17,7 +17,7 @@ local FormatKit = require(Packages:WaitForChild("FormatKit"))
 local Net = require(Packages:WaitForChild("Net"))
 local NotificationController = require(ReplicatedStorage.Controllers.NotificationController)
 
--- Robux �r�nleri (Eksik bakiye tamamlama i�in)
+-- Robux Ürünleri (Eksik bakiye tamamlama için)
 local ROBUX_PRODUCTS = {
 	{Id = 3530798246, Amount = 15000},
 	{Id = 3530798247, Amount = 3500},
@@ -33,7 +33,7 @@ local ShopController = {
 	CachedData = nil
 }
 
---// Helper: Viewport Kamera Ayari (3D �nizleme)
+--// Helper: Viewport Kamera Ayarı (3D Önizleme)
 local function SetupViewportCamera(viewportFrame, model)
 	local camera = Instance.new("Camera")
 	camera.Parent = viewportFrame
@@ -43,7 +43,7 @@ local function SetupViewportCamera(viewportFrame, model)
 	local root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart or model:FindFirstChild("Torso")
 
 	if head and root then
-		-- Karakter modelleri i�in kafaya odaklan
+		-- Karakter modelleri için kafaya odaklan
 		local headPos = head.Position
 		local targetPos = headPos - Vector3.new(0, 0.5, 0) 
 		local camPos = headPos + (root.CFrame.LookVector * 7) + Vector3.new(0, 0.5, 0)
@@ -51,21 +51,21 @@ local function SetupViewportCamera(viewportFrame, model)
 		camera.CFrame = CFrame.lookAt(camPos, targetPos)
 		camera.FieldOfView = 35 
 	else
-		-- Esya modelleri i�in genel odak
+		-- Eşya modelleri için genel odak
 		local cf, size = model:GetBoundingBox()
 		camera.CFrame = CFrame.lookAt(cf.Position + (cf.LookVector * 9), cf.Position)
 		camera.FieldOfView = 40
 	end
 end
 
---// Bakiye Yetersizse Paket �nerisi
+--// Bakiye Yetersizse Paket Önerisi
 function ShopController:PromptBestProduct(itemPrice)
 	local currentMoney = (self.CachedData and self.CachedData.CurrencyData and self.CachedData.CurrencyData.Value) or 0
 	local deficit = itemPrice - currentMoney
 
 	if deficit <= 0 then return end
 
-	-- �r�nleri fiyata g�re sirala
+	-- Ürünleri fiyata göre sırala
 	table.sort(ROBUX_PRODUCTS, function(a, b) return a.Amount < b.Amount end)
 
 	local bestProduct = nil
@@ -92,12 +92,12 @@ function ShopController:UpdateCardState(card, details)
 	local isOwned = false
 	local catName = details.DataCategory or details.Category
 
-	-- Veriden sahiplik kontrol�
+	-- Veriden sahiplik kontrolü
 	if currentData[catName] and currentData[catName][details.Id] then
 		isOwned = true
 	end
 
-	-- Kusanilmis mi kontrol�
+	-- Kuşanılmış mı kontrolü
 	local isEquipped = false
 	if isOwned and details.EquipSlot and currentData.Equippeds then
 		if currentData.Equippeds[details.EquipSlot] == details.Id then
@@ -107,9 +107,9 @@ function ShopController:UpdateCardState(card, details)
 
 	local price = details.Price or 0
 
-	-- Kart G�r�n�m�n� G�ncelle
+	-- Kart Görünümünü Güncelle
 	if isOwned then
-		card.LayoutOrder = price -- Sahip olunanlari da fiyata g�re dizebilirsiniz veya en basa alabilirsiniz
+		card.LayoutOrder = price -- Sahip olunanları da fiyata göre dizebilirsiniz veya en başa alabilirsiniz
 		if isEquipped then
 			card.PurchaseButton.Title.Text = "Unequip"
 			card.PurchaseButton.UIStroke.Color = Color3.fromRGB(255, 170, 0) -- Turuncu
@@ -121,7 +121,7 @@ function ShopController:UpdateCardState(card, details)
 	else
 		card.LayoutOrder = 100000000 + price -- Sahip olunmayanlar sonda
 		card.PurchaseButton.Title.Text = string.format("Buy for %sT$", FormatKit.FormatComma(details.Price))
-		card.PurchaseButton.UIStroke.Color = Color3.fromRGB(0, 255, 100) -- Yesil
+		card.PurchaseButton.UIStroke.Color = Color3.fromRGB(0, 255, 100) -- Yeşil
 		card.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 	end
 
@@ -156,7 +156,7 @@ function ShopController:CreatePage(CategoryName, Enabled, Children)
 	self.Pages[CategoryName] = Page
 	self.CardCache[CategoryName] = {}
 
-	-- Kategori Degistirme
+	-- Kategori Değiştirme
 	CategoryButton.Activated:Connect(function()
 		for name, btn in pairs(self.Buttons) do
 			btn.UIStroke.Color = (name == CategoryName) and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)
@@ -166,7 +166,7 @@ function ShopController:CreatePage(CategoryName, Enabled, Children)
 		end
 	end)
 
-	-- Esyalari Listele
+	-- Eşyaları Listele
 	for itemName, Details in pairs(Children or {}) do
 		local NewCard = UIShopAssets.Card:Clone()
 		NewCard.Parent = Page
@@ -186,13 +186,13 @@ function ShopController:CreatePage(CategoryName, Enabled, Children)
 		self.CardCache[CategoryName][NewCard] = Details
 		self:UpdateCardState(NewCard, Details)
 
-		-- Satin Alma / Kusanma Butonu
+		-- Satın Alma / Kuşanma Butonu
 		NewCard.PurchaseButton.Activated:Connect(function()
 			local catData = self.CachedData and self.CachedData[Details.DataCategory]
 			local isOwned = (catData and catData[Details.Id])
 
 			if isOwned then
-				-- Esya zaten varsa: Kusan/�ikar
+				-- Eşya zaten varsa: Kuşan/Çıkar
 				local state, response = Net:Invoke("ShopService/EquipItem", Details.Id)
 				NotificationController.Signals.SendNotification:Fire(response, state and 2 or 3)
 
@@ -201,7 +201,7 @@ function ShopController:CreatePage(CategoryName, Enabled, Children)
 					self:RefreshAllVisuals()
 				end
 			else
-				-- Esya yoksa: Satin Al
+				-- Eşya yoksa: Satın Al
 				local state, response = Net:Invoke("ShopService/Purchase", Details.Id)
 
 				if not state then
@@ -232,7 +232,7 @@ function ShopController:OnStart()
 	ShopContainer.Interactable = true
 	self.CachedData = Net:Invoke("DataService/GetData")
 
-	-- Veri degistiginde (�rnegin satin alim sonrasi) g�ncelle
+	-- Veri değiştiğinde (örneğin satın alım sonrası) güncelle
 	local DataEvents = Net:RemoteEvent("DataUpdate")
 	if DataEvents then
 		DataEvents.OnClientEvent:Connect(function()
@@ -241,7 +241,7 @@ function ShopController:OnStart()
 		end)
 	end
 
-	-- ShopAssets i�indeki mod�lleri bulma yardimcisi
+	-- ShopAssets içindeki modülleri bulma yardımcısı
 	local function FindItemModuleInAssets(assetName)
 		for _, child in ipairs(ShopAssets:GetDescendants()) do
 			if child.Name == assetName and child:IsA("ModuleScript") then
@@ -253,11 +253,11 @@ function ShopController:OnStart()
 
 	local firstCategory = true
 	
-	-- Kategorileri ve Esyalari Y�kle
+	-- Kategorileri ve Eşyaları Yükle
 	for _, CategoryFolder in ipairs(ShopAssets:GetChildren()) do
 		local Cards = {}
 
-		-- Klas�rdeki tanimli esyalar
+		-- Klasördeki tanımlı eşyalar
 		for _, Item in ipairs(CategoryFolder:GetChildren()) do
 			if Item:IsA("ModuleScript") then
 				local success, itemData = pcall(require, Item)
@@ -271,7 +271,7 @@ function ShopController:OnStart()
 			end
 		end
 
-		-- Oyuncunun sahip oldugu ama listede g�r�nmeyen �zel esyalar varsa ekle
+		-- Oyuncunun sahip olduğu ama listede görünmeyen özel eşyalar varsa ekle
 		if self.CachedData and self.CachedData[CategoryFolder.Name] then
 			for ownedItemId, _ in pairs(self.CachedData[CategoryFolder.Name]) do
 				if not Cards[ownedItemId] then
@@ -290,14 +290,14 @@ function ShopController:OnStart()
 			end
 		end
 
-		-- Sayfayi olustur
+		-- Sayfayı oluştur
 		local btn, pg = self:CreatePage(CategoryFolder.Name, firstCategory, Cards)
 		btn.Parent = ShopContainer.Categories
 		pg.Parent = ShopContainer.Pages
 		firstCategory = false
 	end
 
-	-- Men� A�ma/Kapama Butonu
+	-- Menü Açma/Kapama Butonu
 	if SideHUD:FindFirstChild("Shop") then
 		SideHUD.Shop.ShopButton.Activated:Connect(function()
 			ShopContainer.Visible = not ShopContainer.Visible
