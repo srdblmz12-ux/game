@@ -2,7 +2,7 @@
 	<Meta name="ExplicitAutoJoints">true</Meta>
 	<External>null</External>
 	<External>nil</External>
-	<Item class="ScreenGui" referent="RBXC06D25DBC34C4E28BFDB2E66AE9625A7">
+	<Item class="ScreenGui" referent="RBXA2E33B466EE34776846C277F57BA0F2E">
 		<Properties>
 			<bool name="ClipToDeviceSafeArea">true</bool>
 			<int name="DisplayOrder">0</int>
@@ -25,7 +25,7 @@
 			<int64 name="SourceAssetId">-1</int64>
 			<BinaryString name="Tags"></BinaryString>
 		</Properties>
-		<Item class="Frame" referent="RBX7FD4ACBDC247432486ED44FBFF37C3EE">
+		<Item class="Frame" referent="RBXD73A932A007C4C47BF7CAB6C29AE14EB">
 			<Properties>
 				<token name="Style">0</token>
 				<bool name="Active">false</bool>
@@ -88,7 +88,7 @@
 				<int64 name="SourceAssetId">-1</int64>
 				<BinaryString name="Tags"></BinaryString>
 			</Properties>
-			<Item class="TextButton" referent="RBX9D74832D5B1C4256A7903AFC25155069">
+			<Item class="TextButton" referent="RBX3C25C11EAF16430D8024147EF11DB648">
 				<Properties>
 					<Font name="FontFace">
 						<Family><url>rbxasset://fonts/families/ComicNeueAngular.json</url></Family>
@@ -187,7 +187,7 @@
 					<int64 name="SourceAssetId">-1</int64>
 					<BinaryString name="Tags"></BinaryString>
 				</Properties>
-				<Item class="UIStroke" referent="RBX10BDD2F7FB2C4F75AFDD7FD654F26B54">
+				<Item class="UIStroke" referent="RBX7692600452694C05A9DAFA63F6A99F7A">
 					<Properties>
 						<token name="ApplyStrokeMode">1</token>
 						<UDim name="BorderOffset">
@@ -214,7 +214,7 @@
 						<BinaryString name="Tags"></BinaryString>
 					</Properties>
 				</Item>
-				<Item class="UIStroke" referent="RBX3EA920144B6D4A7DA3F4EA36F579AE28">
+				<Item class="UIStroke" referent="RBX2A8972D4F14A48E29398BD4926F1A4D9">
 					<Properties>
 						<token name="ApplyStrokeMode">0</token>
 						<UDim name="BorderOffset">
@@ -242,7 +242,7 @@
 					</Properties>
 				</Item>
 			</Item>
-			<Item class="Frame" referent="RBX8020B2DD36524B03893A83DAFDA3B9D9">
+			<Item class="Frame" referent="RBXB8B791E2FB67491E9BE3676F14213AC9">
 				<Properties>
 					<token name="Style">0</token>
 					<bool name="Active">false</bool>
@@ -305,7 +305,7 @@
 					<int64 name="SourceAssetId">-1</int64>
 					<BinaryString name="Tags"></BinaryString>
 				</Properties>
-				<Item class="TextButton" referent="RBX960351E61A0D42679C569728FBCD654E">
+				<Item class="TextButton" referent="RBX65E5FD4EAFA44D029C5163814915A7B8">
 					<Properties>
 						<Font name="FontFace">
 							<Family><url>rbxasset://fonts/families/ComicNeueAngular.json</url></Family>
@@ -404,7 +404,7 @@
 						<int64 name="SourceAssetId">-1</int64>
 						<BinaryString name="Tags"></BinaryString>
 					</Properties>
-					<Item class="UIStroke" referent="RBX45A2221FE573454F84CF9AB5DE77584D">
+					<Item class="UIStroke" referent="RBXEC1F39A9226F4243A17E6A544AA36CF9">
 						<Properties>
 							<token name="ApplyStrokeMode">1</token>
 							<UDim name="BorderOffset">
@@ -431,7 +431,7 @@
 							<BinaryString name="Tags"></BinaryString>
 						</Properties>
 					</Item>
-					<Item class="UIStroke" referent="RBX96B1021B759A4713A3CD477786BC1E55">
+					<Item class="UIStroke" referent="RBX46FBEF5ABE704441A3BA5B47B46DC1FD">
 						<Properties>
 							<token name="ApplyStrokeMode">0</token>
 							<UDim name="BorderOffset">
@@ -459,7 +459,7 @@
 						</Properties>
 					</Item>
 				</Item>
-				<Item class="TextButton" referent="RBXFA2C0ACC28284241988AD91CD3BF8AB6">
+				<Item class="TextButton" referent="RBX4D8C82A1363049CDAC4CB80A6331FE9C">
 					<Properties>
 						<Font name="FontFace">
 							<Family><url>rbxasset://fonts/families/ComicNeueAngular.json</url></Family>
@@ -558,7 +558,7 @@
 						<int64 name="SourceAssetId">-1</int64>
 						<BinaryString name="Tags"></BinaryString>
 					</Properties>
-					<Item class="UIStroke" referent="RBX71B569FA9D474E638370D26CA51B0859">
+					<Item class="UIStroke" referent="RBXFE2C990D67F14C8F99D0A7CF46118BC6">
 						<Properties>
 							<token name="ApplyStrokeMode">1</token>
 							<UDim name="BorderOffset">
@@ -585,7 +585,7 @@
 							<BinaryString name="Tags"></BinaryString>
 						</Properties>
 					</Item>
-					<Item class="UIStroke" referent="RBXF4AAFD8B7EAA47AE94ECF57CBC1E341C">
+					<Item class="UIStroke" referent="RBXF76E792831D34AB4A87F9F66E86B50E1">
 						<Properties>
 							<token name="ApplyStrokeMode">0</token>
 							<UDim name="BorderOffset">
@@ -613,7 +613,7 @@
 						</Properties>
 					</Item>
 				</Item>
-				<Item class="TextLabel" referent="RBX44D8FFD48A4147D29751A217F44DB286">
+				<Item class="TextLabel" referent="RBX92D70DAFC7B743869852D19EEB3A4A36">
 					<Properties>
 						<Font name="FontFace">
 							<Family><url>rbxasset://fonts/families/ComicNeueAngular.json</url></Family>
@@ -706,7 +706,7 @@
 						<int64 name="SourceAssetId">-1</int64>
 						<BinaryString name="Tags"></BinaryString>
 					</Properties>
-					<Item class="UIStroke" referent="RBX4D2A19EC9C8E48CF8D3CAE159A49BA53">
+					<Item class="UIStroke" referent="RBXE50C5E7BDEBB46DB81CC6EA53EEEDA45">
 						<Properties>
 							<token name="ApplyStrokeMode">0</token>
 							<UDim name="BorderOffset">
@@ -734,7 +734,7 @@
 						</Properties>
 					</Item>
 				</Item>
-				<Item class="TextLabel" referent="RBX0630246DBE844A5FBB856797D8B34F4F">
+				<Item class="TextLabel" referent="RBX6781612766654B16BF2F77B04132348E">
 					<Properties>
 						<Font name="FontFace">
 							<Family><url>rbxasset://fonts/families/ComicNeueAngular.json</url></Family>
@@ -827,7 +827,7 @@
 						<int64 name="SourceAssetId">-1</int64>
 						<BinaryString name="Tags"></BinaryString>
 					</Properties>
-					<Item class="UIStroke" referent="RBX504685D21B9C4D39BB482A7531733C02">
+					<Item class="UIStroke" referent="RBXC019D1D0566C487D8E6B53C5498C1AD2">
 						<Properties>
 							<token name="ApplyStrokeMode">0</token>
 							<UDim name="BorderOffset">
