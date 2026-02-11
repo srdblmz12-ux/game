@@ -10,7 +10,7 @@ local Common = ReplicatedStorage:WaitForChild("Common")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Assets = Common:WaitForChild("Interface"):WaitForChild("MapAssets") -- Kart Prefab'i burada
 
-local MapModulesFolder = Shared:WaitForChild("MapAssets") -- Harita mod�lleri (Resim vs. i�in)
+local MapModulesFolder = Shared:WaitForChild("MapAssets") -- Harita modülleri (Resim vs. için)
 
 -- Dependencies
 local Net = require(Packages:WaitForChild("Net"))
@@ -23,13 +23,13 @@ local VotingController = {
 	-- State
 	CurrentMaps = {}, -- { [MapName] = CardInstance }
 	SelectedMap = nil,
-	_trove = nil, -- Temizlik i�in
+	_trove = nil, -- Temizlik için
 
 	-- UI Refs
 	HUD = nil,
 	Container = nil,
 
-	-- Network Events (Server'daki VotingService ile konusur)
+	-- Network Events (Server'daki VotingService ile konuşur)
 	Events = {
 		SetOptions = Net:RemoteEvent("SetOptions"),
 		UpdateVotes = Net:RemoteEvent("UpdateVotes"),
@@ -43,27 +43,27 @@ local VotingController = {
 -- =============================================================================
 
 function VotingController:Start()
-	print("[VotingController] Baslatiliyor...")
+	print("[VotingController] Başlatılıyor...")
 
 	local Player = Players.LocalPlayer
 	local PlayerGui = Player:WaitForChild("PlayerGui")
 
-	-- HUD'u bul (Ismi MapVotingHUD olmali)
+	-- HUD'u bul (İsmi MapVotingHUD olmalı)
 	self.HUD = PlayerGui:WaitForChild("MapVotingHUD", 10)
 	if not self.HUD then
-		warn("[VotingController] MapVotingHUD bulunamadi! L�tfen StarterGui'yi kontrol et.")
+		warn("[VotingController] MapVotingHUD bulunamadı! Lütfen StarterGui'yi kontrol et.")
 		return
 	end
 
-	-- Kartlarin konulacagi Container'i bul
+	-- Kartların konulacağı Container'ı bul
 	-- Genelde: HUD -> Background -> Container
 	self.Container = self.HUD:FindFirstChild("Container", true) -- Recursive arama yapar
 	if not self.Container then
-		warn("[VotingController] 'Container' isimli Frame bulunamadi!")
+		warn("[VotingController] 'Container' isimli Frame bulunamadı!")
 		return
 	end
 
-	-- Baslangi�ta gizle
+	-- Başlangıçta gizle
 	self:SetVisible(false)
 
 	-- Eventleri Dinle
@@ -71,17 +71,17 @@ function VotingController:Start()
 end
 
 function VotingController:ConnectNetwork()
-	-- 1. OYLAMA BASLADI (Se�enekler Geldi)
+	-- 1. OYLAMA BAŞLADI (Seçenekler Geldi)
 	self.Events.SetOptions.OnClientEvent:Connect(function(mapNamesArray)
 		self:SetupVotingSession(mapNamesArray)
 	end)
 
-	-- 2. OYLAR G�NCELLENDI
+	-- 2. OYLAR GÜNCELLENDİ
 	self.Events.UpdateVotes.OnClientEvent:Connect(function(votesTable)
 		self:UpdateVoteCounts(votesTable)
 	end)
 
-	-- 3. OYUN BASLADI (Oylama bitti)
+	-- 3. OYUN BAŞLADI (Oylama bitti)
 	self.Events.GameStarted.OnClientEvent:Connect(function()
 		self:SetVisible(false)
 		self:ClearCards()
@@ -98,13 +98,13 @@ function VotingController:SetupVotingSession(mapNames)
 	self.SelectedMap = nil
 	self:SetVisible(true)
 
-	print("[VotingController] Se�enekler:", table.concat(mapNames, ", "))
+	print("[VotingController] Seçenekler:", table.concat(mapNames, ", "))
 
 	for index, mapName in ipairs(mapNames) do
-		-- Harita Mod�l�nden Veriyi �ek (Resim vs. i�in)
+		-- Harita Modülünden Veriyi Çek (Resim vs. için)
 		local mapInfo = self:GetMapInfo(mapName)
 
-		-- Karti Olustur
+		-- Kartı Oluştur
 		self:CreateCard(mapName, mapInfo, index)
 	end
 end
@@ -118,7 +118,7 @@ function VotingController:CreateCard(mapName, mapInfo, layoutOrder)
 	card.LayoutOrder = layoutOrder
 	card.Parent = self.Container
 
-	-- Trove ile takip et (Otomatik silmek i�in)
+	-- Trove ile takip et (Otomatik silmek için)
 	self._trove:Add(card)
 	self.CurrentMaps[mapName] = card
 
@@ -126,7 +126,7 @@ function VotingController:CreateCard(mapName, mapInfo, layoutOrder)
 	local nameLabel = card:FindFirstChild("MapName", true) -- Recursive bul
 	local imageLabel = card:FindFirstChild("Image", true)
 	local voteLabel = card:FindFirstChild("VoteCount", true)
-	local button = card:FindFirstChild("Button", true) or card -- Button yoksa kartin kendisi buton olsun
+	local button = card:FindFirstChild("Button", true) or card -- Button yoksa kartın kendisi buton olsun
 
 	if nameLabel then nameLabel.Text = mapName end
 	if voteLabel then voteLabel.Text = "0" end
@@ -135,10 +135,10 @@ function VotingController:CreateCard(mapName, mapInfo, layoutOrder)
 	if imageLabel and mapInfo and mapInfo.Image then
 		imageLabel.Image = mapInfo.Image
 	elseif imageLabel then
-		imageLabel.Image = "" -- Resim yoksa bosalt
+		imageLabel.Image = "" -- Resim yoksa boşalt
 	end
 
-	-- Tiklama Islemi
+	-- Tıklama İşlemi
 	if button and button:IsA("GuiButton") then
 		self._trove:Connect(button.Activated, function()
 			self:CastVote(mapName)
@@ -155,20 +155,20 @@ function VotingController:CreateCard(mapName, mapInfo, layoutOrder)
 end
 
 function VotingController:UpdateVoteCounts(votesTable)
-	-- �nce saya�lari sifirla
+	-- Önce sayaçları sıfırla
 	local counts = {}
 	for mapName, _ in pairs(self.CurrentMaps) do
 		counts[mapName] = 0
 	end
 
-	-- Oylari say
+	-- Oyları say
 	for _, votedMap in pairs(votesTable) do
 		if counts[votedMap] then
 			counts[votedMap] += 1
 		end
 	end
 
-	-- Textleri g�ncelle
+	-- Textleri güncelle
 	for mapName, count in pairs(counts) do
 		local card = self.CurrentMaps[mapName]
 		if card then
@@ -185,10 +185,10 @@ function VotingController:CastVote(mapName)
 
 	self.SelectedMap = mapName
 
-	-- Server'a g�nder
+	-- Server'a gönder
 	self.Events.SubmitVote:FireServer(mapName)
 
-	-- G�rsel se�im efekti
+	-- Görsel seçim efekti
 	for name, card in pairs(self.CurrentMaps) do
 		self:PlaySelectAnim(card, name == mapName)
 	end
@@ -199,7 +199,7 @@ end
 -- =============================================================================
 
 function VotingController:GetMapInfo(mapName)
-	-- Shared/MapAssets i�indeki ModuleScript'i require et
+	-- Shared/MapAssets içindeki ModuleScript'i require et
 	local module = MapModulesFolder:FindFirstChild(mapName)
 	if module and module:IsA("ModuleScript") then
 		local success, data = pcall(require, module)
@@ -223,7 +223,7 @@ function VotingController:ClearCards()
 	end
 	self.CurrentMaps = {}
 
-	-- Container i�ini manuel de temizle (Trove ka�irirsa diye)
+	-- Container içini manuel de temizle (Trove kaçırırsa diye)
 	if self.Container then
 		for _, child in ipairs(self.Container:GetChildren()) do
 			if child:IsA("GuiObject") then child:Destroy() end
