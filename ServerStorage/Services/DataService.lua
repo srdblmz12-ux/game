@@ -73,7 +73,15 @@ end
 --// Client Functions
 
 function DataService.Client:GetData(player)
-	return DataService:GetData(player)
+	-- Server tarafındaki Promise'in tamamlanmasını bekler ve sonucu (Data) döndürür
+	local success, data = DataService:GetData(player):await()
+
+	if success then
+		return data
+	else
+		warn("Data load failed for " .. player.Name .. ":", data)
+		return nil
+	end
 end
 
 --// Server Functions
@@ -146,18 +154,35 @@ function DataService:SetDictionaryItem(player, path, key, value)
 end
 
 function DataService:GetData(player)
-	local profile = self.LoadedProfiles[player]
-	if profile then return profile.Data end
+	return Promise.new(function(resolve, reject)
+		-- 1. Veri halihazırda yüklü mü kontrol et
+		local profile = self.LoadedProfiles[player]
+		if profile then
+			return resolve(profile.Data)
+		end
 
-	local maxRetries = 100
-	local attempts = 0
-	while player:IsDescendantOf(Players) and attempts < maxRetries do
-		attempts += 1
-		profile = self.LoadedProfiles[player]
-		if profile then return profile.Data end
-		task.wait(0.1)
-	end
-	return nil
+		-- 2. Eğer yüklü değilse sinyalleri dinle
+		local loadedConnection
+		local removingConnection
+
+		-- Profil yüklendi sinyalini dinle
+		loadedConnection = self.Signals.ProfileLoaded:Once(function(loadedPlayer, loadedProfile)
+			if loadedPlayer == player then
+				loadedConnection:Disconnect()
+				removingConnection:Disconnect()
+				resolve(loadedProfile.Data)
+			end
+		end)
+
+		-- Oyuncu oyundan çıkarsa işlemi iptal et (Hafıza sızıntısını önler)
+		removingConnection = Players.PlayerRemoving:Connect(function(leavingPlayer)
+			if leavingPlayer == player then
+				loadedConnection:Disconnect()
+				removingConnection:Disconnect()
+				reject("Player left before data loaded")
+			end
+		end)
+	end)
 end
 
 function DataService:GetProfile(player)
@@ -218,8 +243,12 @@ function DataService:ReleaseProfile(player)
 end
 
 function DataService:OnStart()
-	Players.PlayerAdded:Connect(function(player) self:LoadProfile(player) end)
-	Players.PlayerRemoving:Connect(function(player) self:ReleaseProfile(player) end)
+	Players.PlayerAdded:Connect(function(player)
+		self:LoadProfile(player)
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		self:ReleaseProfile(player)
+	end)
 
 	for _, player in ipairs(Players:GetPlayers()) do
 		task.spawn(function() self:LoadProfile(player) end)
