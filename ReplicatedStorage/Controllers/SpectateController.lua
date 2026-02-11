@@ -26,7 +26,7 @@ local SpectateController = {
 	Trove = Trove.new(),
 }
 
---// YARDIMCI FONKSIYONLAR
+--// YARDIMCI FONKSİYONLAR
 
 function SpectateController:GetValidTargets()
 	local targets = {}
@@ -53,8 +53,8 @@ function SpectateController:UpdateView(Container)
 
 	local targetPlayer = self.ValidTargets[self.CurrentTargetIndex]
 
-	-- UI G�NCELLEME KISMI
-	-- Hiyerarsi: SpectateContainer -> Controllers -> [Username, Role, NextButton, PreviousButton]
+	-- UI GÜNCELLEME KISMI
+	-- Hiyerarşi: SpectateContainer -> Controllers -> [Username, Role, NextButton, PreviousButton]
 	local ControllersUI = Container:FindFirstChild("Controllers")
 	if not ControllersUI then return end
 
@@ -94,7 +94,7 @@ function SpectateController:StartSpectating(Container)
 	GameController:SetSpectating(true)
 	self.CurrentTargetIndex = 1
 
-	-- UI A�
+	-- UI Aç
 	Container.Visible = true
 	local SpectateButton = Container:FindFirstChild("SpectateButton")
 	if SpectateButton and SpectateButton:FindFirstChild("Title") then
@@ -165,17 +165,17 @@ function SpectateController:PrevTarget(Container)
 end
 
 function SpectateController:OnStart()
-	-- UI Nesnelerini G�venli Sekilde Bekle
+	-- UI Nesnelerini Güvenli Şekilde Bekle
 	local HUD = PlayerGui:WaitForChild("SpectateHUD", 10)
-	if not HUD then warn("SpectateHUD bulunamadi!") return end
+	if not HUD then warn("SpectateHUD bulunamadı!") return end
 
 	local Container = HUD:WaitForChild("SpectateContainer", 10)
-	if not Container then warn("SpectateContainer bulunamadi!") return end
+	if not Container then warn("SpectateContainer bulunamadı!") return end
 
 	local SpectateBtn = Container:WaitForChild("SpectateButton", 5)
 	local ControllersUI = Container:WaitForChild("Controllers", 5)
 
-	-- Buton Isimlerini G�ncelledik: PreviousButton / NextButton
+	-- Buton İsimlerini Güncelledik: PreviousButton / NextButton
 	local PrevBtn = ControllersUI and ControllersUI:WaitForChild("PreviousButton", 5)
 	local NextBtn = ControllersUI and ControllersUI:WaitForChild("NextButton", 5)
 
@@ -184,7 +184,7 @@ function SpectateController:OnStart()
 
 	local CurrentGameStatus = "Intermission"
 
-	-- Event Baglantilari
+	-- Event Bağlantıları
 	if SpectateBtn then
 		SpectateBtn.Activated:Connect(function()
 			if self.IsSpectating then
