@@ -21,7 +21,7 @@ local LocalPlayer = Players.LocalPlayer
 local PerkController = {
 	Name = script.Name,
 
-	-- Client Logic Mod�lleri (Visuals, Inputs)
+	-- Client Logic Modülleri (Visuals, Inputs)
 	CachedPerks = {
 		MurdererPerks = {},
 		SurvivorPerks = {}
@@ -38,7 +38,7 @@ local PerkController = {
 	},
 }
 
---// Helper: Mod�lleri Cache'le
+--// Helper: Modülleri Cache'le
 local function CacheModules(Folder, TargetTable)
 	for _, Module in ipairs(Folder:GetChildren()) do
 		if Module:IsA("ModuleScript") then
@@ -46,24 +46,24 @@ local function CacheModules(Folder, TargetTable)
 			if success then
 				TargetTable[Module.Name] = api
 			else
-				warn(`[PerkController] Mod�l y�klenemedi: {Module.Name}`)
+				warn(`[PerkController] Modül yüklenemedi: {Module.Name}`)
 			end
 		end
 	end
 end
 
---// �EKIRDEK: Perk Kayit (Hybrid System)
+--// ÇEKİRDEK: Perk Kayıt (Hybrid System)
 function PerkController:RegisterPerk(PerkName : string, ToolInstance : Tool?)
-	-- Eger zaten kayitliysa tekrar islem yapma
+	-- Eğer zaten kayıtlıysa tekrar işlem yapma
 	if self.ActivePerks[PerkName] then return end
 
-	-- 1. Ilgili Mod�l� Bul
+	-- 1. İlgili Modülü Bul
 	local PerkAPI = self.CachedPerks.SurvivorPerks[PerkName] or self.CachedPerks.MurdererPerks[PerkName]
 
-	-- Client tarafinda mod�l� yoksa (sadece server datasiysa) bos tablo kullan
+	-- Client tarafında modülü yoksa (sadece server datasıysa) boş tablo kullan
 	local ClientModule = PerkAPI and table.clone(PerkAPI) or {}
 
-	-- 2. Temizlik ve Y�netim Objeleri
+	-- 2. Temizlik ve Yönetim Objeleri
 	local PerkTrove = Trove.new()
 
 	local PerkObject = {
@@ -72,10 +72,10 @@ function PerkController:RegisterPerk(PerkName : string, ToolInstance : Tool?)
 		Tool = ToolInstance, -- Tool varsa instance, yoksa nil
 		Trove = PerkTrove,
 		Player = LocalPlayer,
-		Button = nil -- Mobil butonu buraya kaydedecegiz
+		Button = nil -- Mobil butonu buraya kaydedeceğiz
 	}
 
-	--// TIP A: FIZIKSEL TOOL (Bi�ak, Medkit vb.)
+	--// TİP A: FİZİKSEL TOOL (Bıçak, Medkit vb.)
 	if ToolInstance then
 		-- Tool Eventleri
 		PerkTrove:Connect(ToolInstance.Activated, function()
@@ -90,21 +90,21 @@ function PerkController:RegisterPerk(PerkName : string, ToolInstance : Tool?)
 			if ClientModule.OnUnequip then ClientModule:OnUnequip(PerkObject) end
 		end)
 
-		-- Tool Yok Oldugunda Temizle
+		-- Tool Yok Olduğunda Temizle
 		PerkTrove:Connect(ToolInstance.Destroying, function()
 			self:UnregisterPerk(PerkName)
 		end)
 
-		-- Envanterden D�serse Temizle (Parent Degisimi)
+		-- Envanterden Düşerse Temizle (Parent Değişimi)
 		PerkTrove:Connect(ToolInstance.AncestryChanged, function(_, parent)
 			if parent ~= LocalPlayer.Backpack and parent ~= LocalPlayer.Character then
 				self:UnregisterPerk(PerkName)
 			end
 		end)
 
-		--// TIP B: SANAL SKILL (Sprint, Dash, Pasif vb.)
+		--// TİP B: SANAL SKILL (Sprint, Dash, Pasif vb.)
 	else
-		-- Tus Listesini Hazirla (Multi-Key Destegi)
+		-- Tuş Listesini Hazırla (Multi-Key Desteği)
 		local keysToBind = {}
 
 		-- Tekil 'Keybind' varsa ekle
@@ -112,36 +112,36 @@ function PerkController:RegisterPerk(PerkName : string, ToolInstance : Tool?)
 			table.insert(keysToBind, ClientModule.Keybind)
 		end
 
-		-- �ogul 'Keybinds' tablosu varsa hepsini ekle
+		-- Çoğul 'Keybinds' tablosu varsa hepsini ekle
 		if ClientModule.Keybinds and type(ClientModule.Keybinds) == "table" then
 			for _, key in ipairs(ClientModule.Keybinds) do
 				table.insert(keysToBind, key)
 			end
 		end
 
-		-- Eger tanimli tus varsa ContextActionService bagla
+		-- Eğer tanımlı tuş varsa ContextActionService bağla
 		if #keysToBind > 0 then
 			local ActionName = "PerkAction_" .. PerkName
 
-			-- BindAction (unpack ile �oklu tus destegi)
+			-- BindAction (unpack ile çoklu tuş desteği)
 			ContextActionService:BindAction(ActionName, function(actionName, state, inputObj)
 				if state == Enum.UserInputState.Begin then
 					-- Server'a bildir
 					self.Network.PerkActivated:FireServer(PerkName)
 
-					-- Client Visual/Logic �alistir
+					-- Client Visual/Logic çalıştır
 					if ClientModule.OnActivate then
 						ClientModule:OnActivate(PerkObject)
 					end
 				end
 			end, true, unpack(keysToBind))
 
-			-- Mobil Buton �zellestirmeleri
+			-- Mobil Buton Özelleştirmeleri
 			local mobileButton = ContextActionService:GetButton(ActionName)
 			if mobileButton then
-				PerkObject.Button = mobileButton -- Obje i�ine kaydet (Cooldown g�rseli vb. i�in)
+				PerkObject.Button = mobileButton -- Obje içine kaydet (Cooldown görseli vb. için)
 
-				-- Resim veya Baslik
+				-- Resim veya Başlık
 				if ClientModule.MobileImage then
 					ContextActionService:SetImage(ActionName, ClientModule.MobileImage)
 				elseif ClientModule.MobileTitle then
@@ -159,13 +159,13 @@ function PerkController:RegisterPerk(PerkName : string, ToolInstance : Tool?)
 				end
 			end
 
-			-- Perk Silinince Tusu Kaldir
+			-- Perk Silinince Tuşu Kaldır
 			PerkTrove:Add(function()
 				ContextActionService:UnbindAction(ActionName)
 			end)
 		end
 
-		-- Sanal Skill Eklenince 'Equip' sayilir (Pasif baslaticilar i�in)
+		-- Sanal Skill Eklenince 'Equip' sayılır (Pasif başlatıcılar için)
 		if ClientModule.OnEquip then
 			task.spawn(function() ClientModule:OnEquip(PerkObject) end)
 		end
@@ -175,13 +175,13 @@ function PerkController:RegisterPerk(PerkName : string, ToolInstance : Tool?)
 	self.ActivePerks[PerkName] = PerkObject
 
 	-- 4. Trove Temizlik Garantisi
-	-- Trove destroy edildiginde listeden silindiginden emin ol
+	-- Trove destroy edildiğinde listeden silindiğinden emin ol
 	PerkTrove:Add(function()
-		-- Eger listedeki hala bu objeyse (yenisi gelmediyse) sil
+		-- Eğer listedeki hala bu objeyse (yenisi gelmediyse) sil
 		if self.ActivePerks[PerkName] == PerkObject then
 			self.ActivePerks[PerkName] = nil
 
-			-- Sanal skiller i�in Unequip �agir
+			-- Sanal skiller için Unequip çağır
 			if not ToolInstance and ClientModule.OnUnequip then
 				ClientModule:OnUnequip(PerkObject)
 			end
@@ -189,22 +189,22 @@ function PerkController:RegisterPerk(PerkName : string, ToolInstance : Tool?)
 	end)
 end
 
---// �EKIRDEK: Perk Silme
+--// ÇEKİRDEK: Perk Silme
 function PerkController:UnregisterPerk(PerkName : string)
 	local perkData = self.ActivePerks[PerkName]
 
 	if perkData then
-		-- Trove'u destroy etmek her seyi temizler:
-		-- Eventleri koparir, Keybind'lari siler, Listeden kaydi siler.
+		-- Trove'u destroy etmek her şeyi temizler:
+		-- Eventleri koparır, Keybind'ları siler, Listeden kaydı siler.
 		if perkData.Trove then
 			perkData.Trove:Destroy()
 		end
 	end
 end
 
---// BASLANGI�
+--// BAŞLANGIÇ
 function PerkController:OnStart()
-	-- 1. Mod�lleri Y�kle
+	-- 1. Modülleri Yükle
 	CacheModules(SurvivorSkills, self.CachedPerks.SurvivorPerks)
 	CacheModules(MurdererSkills.Skills, self.CachedPerks.MurdererPerks)
 
@@ -212,23 +212,23 @@ function PerkController:OnStart()
 	local function OnToolAdded(Tool)
 		if not Tool:IsA("Tool") then return end
 
-		-- Sadece LocalPlayer'a aitse isle
+		-- Sadece LocalPlayer'a aitse işle
 		if Tool.Parent == LocalPlayer.Backpack or Tool.Parent == LocalPlayer.Character then
 			self:RegisterPerk(Tool.Name, Tool)
 		end
 	end
 
-	-- Taglenen Toollari dinle
+	-- Taglenen Toolları dinle
 	CollectionService:GetInstanceAddedSignal(TagKey):Connect(OnToolAdded)
 
-	-- Mevcut Toollari Tara
+	-- Mevcut Toolları Tara
 	for _, tool in ipairs(CollectionService:GetTagged(TagKey)) do
 		OnToolAdded(tool)
 	end
 
 	-- 3. Server Sinyalleri (Sanal Skiller ve Silme Emirleri)
 	self.Network.PerkAssigned.OnClientEvent:Connect(function(Data)
-		-- Veri yoksa (nil) t�m perkleri sil (Reset)
+		-- Veri yoksa (nil) tüm perkleri sil (Reset)
 		if not Data then
 			for name, _ in pairs(self.ActivePerks) do
 				self:UnregisterPerk(name)
@@ -236,12 +236,12 @@ function PerkController:OnStart()
 			return
 		end
 
-		-- Server { Name="...", Remove=true } g�nderdiyse sil
+		-- Server { Name="...", Remove=true } gönderdiyse sil
 		if Data.Remove then
 			self:UnregisterPerk(Data.Name)
 		else
-			-- Server { Name="..." } g�nderdiyse ekle
-			-- Tool parametresi 'nil' oldugu i�in RegisterPerk bunu sanal skill olarak isler
+			-- Server { Name="..." } gönderdiyse ekle
+			-- Tool parametresi 'nil' olduğu için RegisterPerk bunu sanal skill olarak işler
 			self:RegisterPerk(Data.Name, nil)
 		end
 	end)
