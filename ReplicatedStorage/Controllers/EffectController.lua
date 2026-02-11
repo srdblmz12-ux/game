@@ -15,12 +15,12 @@ local Net = require(Packages:WaitForChild("Net"))
 local EffectController = {
 	Name = script.Name,
 	Signals = {
-		StartFX = Signal.new(), -- Client i�inden tetiklemek istersen: self.Signals.StartFX:Fire("BloodSplash", ...)
+		StartFX = Signal.new(), -- Client içinden tetiklemek istersen: self.Signals.StartFX:Fire("BloodSplash", ...)
 	},
-	LoadedEffects = {} -- Efekt mod�llerini burada tutacagiz
+	LoadedEffects = {} -- Efekt modüllerini burada tutacağız
 }
 
--- // YARDIMCI: Efekti �alistiran Fonksiyon
+-- // YARDIMCI: Efekti Çalıştıran Fonksiyon
 function EffectController:_playEffect(effectName, ...)
 	local effectModule = self.LoadedEffects[effectName]
 
@@ -29,24 +29,24 @@ function EffectController:_playEffect(effectName, ...)
 		return
 	end
 
-	-- Her efekt i�in yeni bir Trove olusturuyoruz.
-	-- Efekt mod�l� isi bitince bu trove'u temizlemeli veya trove i�indeki objeler s�re bitince silinmeli.
+	-- Her efekt için yeni bir Trove oluşturuyoruz.
+	-- Efekt modülü işi bitince bu trove'u temizlemeli veya trove içindeki objeler süre bitince silinmeli.
 	local effectTrove = Trove.new()
 
-	-- Hata olursa diger kodlari durdurmasin diye task.spawn i�inde �alistiriyoruz
+	-- Hata olursa diğer kodları durdurmasın diye task.spawn içinde çalıştırıyoruz
 	task.spawn(function(...)
 		if effectModule.Activate then
 			-- :Activate(Trove, Argumanlar...)
 			effectModule:Activate(effectTrove, ...)
 		else
 			warn("[EffectController] Activate method missing in:", effectName)
-			effectTrove:Destroy() -- Hataliysa hemen temizle
+			effectTrove:Destroy() -- Hatalıysa hemen temizle
 		end
 	end, ...)
 end
 
 function EffectController:OnStart()
-	-- 1. EffectAssets Klas�r�ndeki Mod�lleri Y�kle
+	-- 1. EffectAssets Klasöründeki Modülleri Yükle
 	for _, moduleScript in ipairs(EffectAssets:GetChildren()) do
 		if moduleScript:IsA("ModuleScript") then
 			local success, result = pcall(require, moduleScript)
@@ -60,14 +60,14 @@ function EffectController:OnStart()
 	end
 
 	-- 2. Server'dan Gelen Efektleri Dinle
-	-- �rn: Server "BloodSplash", Motor6D g�nderdiginde burasi yakalar
+	-- Örn: Server "BloodSplash", Motor6D gönderdiğinde burası yakalar
 	local startFXEvent = Net:RemoteEvent("StartFX")
 	startFXEvent.OnClientEvent:Connect(function(effectName, ...)
 		self:_playEffect(effectName, ...)
 	end)
 
-	-- 3. Client I�i (Local) Efektleri Dinle
-	-- �rn: UI butonuna basinca efekt �iksin istersen
+	-- 3. Client İçi (Local) Efektleri Dinle
+	-- Örn: UI butonuna basınca efekt çıksın istersen
 	self.Signals.StartFX:Connect(function(effectName, ...)
 		self:_playEffect(effectName, ...)
 	end)
