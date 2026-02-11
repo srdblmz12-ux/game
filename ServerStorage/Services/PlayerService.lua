@@ -32,10 +32,11 @@ local PlayerService = {
 	Signals = {
 		PlayerAdded = Signal.new(),
 		PlayerRemoving = Signal.new(),
-		PlayerDied = Signal.new(), -- [YENİ] Biri öldüğünde tetiklenir
 	},
 	Network = {
-		DataUpdated = Net:RemoteEvent("DataUpdated"),
+		PlayerDataUpdated = Net:RemoteEvent("PlayerDataUpdated"),
+
+		ChanceUpdate = Net:RemoteEvent("ChanceUpdate") --geçici
 	},
 
 	LoadedPlayers = {}, 
@@ -125,7 +126,7 @@ function PlayerService:SetData(Player : Player, Path : string, NewValue : any)
 	local parentTable, key = GetTablePath(playerData, Path)
 	if parentTable and key then
 		parentTable[key] = NewValue
-		self.Network.DataUpdated:FireClient(Player, Path, NewValue)
+		self.Network.PlayerDataUpdated:FireClient(Player, Path, NewValue)
 	end
 end
 
@@ -136,7 +137,7 @@ function PlayerService:UpdateData(Player : Player, Callback : ({}) -> ({}))
 	local success, result = pcall(Callback, playerData)
 	if success and result ~= nil then
 		self.LoadedPlayers[Player] = result
-		self.Network.DataUpdated:FireClient(Player, nil, result)
+		self.Network.PlayerDataUpdated:FireClient(Player, nil, result)
 	end
 end
 
@@ -176,22 +177,19 @@ function PlayerService:OnStart()
 			warn("Error requiring module: " .. Module.Name .. " - " .. tostring(Response))
 			continue
 		end
-
 		if (typeof(Response) == "table") then
 			if (typeof(Response.OnPlayerAdded) == "function") then
-				for _, player in ipairs(Players:GetPlayers()) do
-					task.spawn(function()
-						Response:OnPlayerAdded(player)
-					end)
+				for _, Player in ipairs(Players:GetPlayers()) do
+					pcall(Response.OnPlayerAdded, Response, Player)
 				end
 				self.Signals.PlayerAdded:Connect(function(Player)
-					Response:OnPlayerAdded(Player)
+					pcall(Response.OnPlayerAdded, Response, Player)
 				end)
 			end
 
 			if (typeof(Response.OnPlayerRemoving) == "function") then
 				self.Signals.PlayerRemoving:Connect(function(Player)
-					Response:OnPlayerRemoving(Player)
+					pcall(Response.OnPlayerRemoving, Response, Player)
 				end)
 			end
 		end
