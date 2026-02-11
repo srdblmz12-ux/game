@@ -157,7 +157,7 @@ function PerkService:PerkSelectionLimit(Limit : number?)
 	self.SelectionLimit = NewLimit
 	
 	if (OldLimit ~= self.SelectionLimit) then
-		self.Network.PerkSelectionUpdated:FireClients(Limit)
+		self.Network.PerkSelectionLimit:FireAllClients(Limit)
 	end
 end
 
