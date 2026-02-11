@@ -134,7 +134,7 @@ function VotingController:OnStart()
 	-- Kartların Konulacağı Alan (Container)
 	-- Genelde HUD -> Container veya HUD -> Background -> MapsContainer şeklindedir.
 	-- Eğer bulamazsanız burayı UI hiyerarşinize göre düzeltin.
-	self.Container = self.HUD:FindFirstChild("Container") or self.HUD:FindFirstChild("Background") and self.HUD.Background:FindFirstChild("Container")
+	self.Container = self.HUD:FindFirstChild("VotingContainer") or self.HUD:FindFirstChild("Background") and self.HUD.Background:FindFirstChild("Container")
 
 	if not self.Container then
 		warn("VotingController: Container not found in MapVotingHUD")
