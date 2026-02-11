@@ -30,23 +30,23 @@ local CONFIG = {
 local AmbientSoundController = {
 	Name = script.Name,
 
-	_currentTrack = nil,      -- Su an �alan oyun m�zigi
-	_lastAmbientTrack = nil,  -- En son �alan oyun m�zigi (tekrari �nlemek i�in)
+	_currentTrack = nil,      -- Şu an çalan oyun müziği
+	_lastAmbientTrack = nil,  -- En son çalan oyun müziği (tekrarı önlemek için)
 
-	_currentLobbyTrack = nil, -- Su an �alan lobi m�zigi
-	_lastLobbyTrack = nil,    -- En son �alan lobi m�zigi (tekrari �nlemek i�in)
+	_currentLobbyTrack = nil, -- Şu an çalan lobi müziği
+	_lastLobbyTrack = nil,    -- En son çalan lobi müziği (tekrarı önlemek için)
 
-	_musicConnection = nil,   -- M�zik bittiginde tetiklenen baglanti (Ended event)
+	_musicConnection = nil,   -- Müzik bittiğinde tetiklenen bağlantı (Ended event)
 	_heartbeatConnection = nil,
 	_targetKiller = nil,
 	_isGameRunning = false
 }
 
 -- =============================================================================
---  YARDIMCI FONKSIYONLAR (SE�IM MANTIGI)
+--  YARDIMCI FONKSİYONLAR (SEÇİM MANTIĞI)
 -- =============================================================================
 
--- Rastgele ama bir �ncekiyle ayni olmayan bir sarki se�er
+-- Rastgele ama bir öncekiyle aynı olmayan bir şarkı seçer
 function AmbientSoundController:_pickNextTrack(folder, lastTrack)
 	local tracks = folder:GetChildren()
 	local validTracks = {}
@@ -59,48 +59,48 @@ function AmbientSoundController:_pickNextTrack(folder, lastTrack)
 	end
 
 	if #validTracks == 0 then return nil end
-	if #validTracks == 1 then return validTracks[1] end -- Sadece 1 sarki varsa mecburen onu se�
+	if #validTracks == 1 then return validTracks[1] end -- Sadece 1 şarkı varsa mecburen onu seç
 
 	local nextTrack
 	repeat
 		nextTrack = validTracks[math.random(1, #validTracks)]
-	until nextTrack ~= lastTrack -- Bir �ncekiyle ayni olmayana kadar tekrar se�
+	until nextTrack ~= lastTrack -- Bir öncekiyle aynı olmayana kadar tekrar seç
 
 	return nextTrack
 end
 
 -- =============================================================================
---  LOBBY M�ZIK SISTEMI
+--  LOBBY MÜZİK SİSTEMİ
 -- =============================================================================
 
 function AmbientSoundController:_playLobbyMusic()
-	-- Eger oyun i�i m�zik baglantisi varsa kopar (�akismayi �nle)
+	-- Eğer oyun içi müzik bağlantısı varsa kopar (çakışmayı önle)
 	if self._musicConnection then 
 		self._musicConnection:Disconnect() 
 		self._musicConnection = nil
 	end
 
-	-- �nceki �alani durdur
-	self:_stopAmbient(true) -- True: Hizli durdur
+	-- Önceki çalanı durdur
+	self:_stopAmbient(true) -- True: Hızlı durdur
 
-	-- Yeni sarki se� (�ncekisiyle ayni olmayan)
+	-- Yeni şarkı seç (Öncekisiyle aynı olmayan)
 	local track = self:_pickNextTrack(LobbyMusics, self._lastLobbyTrack)
 	if not track then return end
 
-	-- Yeni sarkiyi ayarla
+	-- Yeni şarkıyı ayarla
 	self._currentLobbyTrack = track
-	self._lastLobbyTrack = track -- Kaydet ki bir dahaki sefere aynisi gelmesin
+	self._lastLobbyTrack = track -- Kaydet ki bir dahaki sefere aynısı gelmesin
 
-	track.Looped = false -- Istegin �zerine loop kapatildi
+	track.Looped = false -- İsteğin üzerine loop kapatıldı
 	track.Volume = 0
 	track:Play()
 
 	-- Fade In
 	TweenService:Create(track, TweenInfo.new(CONFIG.FADE_TIME), {Volume = CONFIG.LOBBY_MAX_VOL}):Play()
 
-	-- Sarki bittiginde ne olacagini dinle
+	-- Şarkı bittiğinde ne olacağını dinle
 	self._musicConnection = track.Ended:Connect(function()
-		-- Eger hala oyun baslamadiysa (lobi durumundaysak) siradaki sarkiya ge�
+		-- Eğer hala oyun başlamadıysa (lobi durumundaysak) sıradaki şarkıya geç
 		if not self._isGameRunning then
 			self:_playLobbyMusic()
 		end
@@ -108,7 +108,7 @@ function AmbientSoundController:_playLobbyMusic()
 end
 
 function AmbientSoundController:_stopLobbyMusic()
-	-- Event baglantisini kopar ki sarki durunca yenisini baslatmaya �alismasin
+	-- Event bağlantısını kopar ki şarkı durunca yenisini başlatmaya çalışmasın
 	if self._musicConnection then
 		self._musicConnection:Disconnect()
 		self._musicConnection = nil
@@ -126,11 +126,11 @@ function AmbientSoundController:_stopLobbyMusic()
 end
 
 -- =============================================================================
---  OYUN I�I AMBIENT SISTEMI
+--  OYUN İÇİ AMBIENT SİSTEMİ
 -- =============================================================================
 
 function AmbientSoundController:_playRandomAmbient()
-	-- Eger lobi m�zigi baglantisi varsa kopar
+	-- Eğer lobi müziği bağlantısı varsa kopar
 	if self._musicConnection then 
 		self._musicConnection:Disconnect() 
 		self._musicConnection = nil
@@ -138,24 +138,24 @@ function AmbientSoundController:_playRandomAmbient()
 
 	self:_stopLobbyMusic()
 
-	-- Yeni sarki se� (�ncekisiyle ayni olmayan)
+	-- Yeni şarkı seç (Öncekisiyle aynı olmayan)
 	local track = self:_pickNextTrack(GameAmbients, self._lastAmbientTrack)
 	if not track then return end
 
-	-- Yeni sarkiyi ayarla
+	-- Yeni şarkıyı ayarla
 	self._currentTrack = track
 	self._lastAmbientTrack = track
 
-	track.Looped = false -- Istegin �zerine loop kapatildi
+	track.Looped = false -- İsteğin üzerine loop kapatıldı
 	track.Volume = 0
 	track:Play()
 
 	-- Fade In
 	TweenService:Create(track, TweenInfo.new(CONFIG.FADE_TIME), {Volume = CONFIG.AMBIENT_MAX_VOL}):Play()
 
-	-- Sarki bittiginde ne olacagini dinle
+	-- Şarkı bittiğinde ne olacağını dinle
 	self._musicConnection = track.Ended:Connect(function()
-		-- Eger hala oyun devam ediyorsa siradaki sarkiya ge�
+		-- Eğer hala oyun devam ediyorsa sıradaki şarkıya geç
 		if self._isGameRunning then
 			self:_playRandomAmbient()
 		end
@@ -163,7 +163,7 @@ function AmbientSoundController:_playRandomAmbient()
 end
 
 function AmbientSoundController:_stopAmbient(instant)
-	-- Event baglantisini kopar
+	-- Event bağlantısını kopar
 	if self._musicConnection then
 		self._musicConnection:Disconnect()
 		self._musicConnection = nil
@@ -186,7 +186,7 @@ function AmbientSoundController:_stopAmbient(instant)
 end
 
 -- =============================================================================
---  HEARTBEAT LOGIC (DEGISIKLIK YOK)
+--  HEARTBEAT LOGIC (DEĞİŞİKLİK YOK)
 -- =============================================================================
 
 function AmbientSoundController:_updateHeartbeat()
@@ -245,11 +245,11 @@ function AmbientSoundController:OnStart()
 	local GameStartedEvent = Net:RemoteEvent("GameStarted")
 	local GameEndedEvent = Net:RemoteEvent("GameEnded")
 
-	-- 1. OYUN BASLADIGINDA
+	-- 1. OYUN BAŞLADIĞINDA
 	GameStartedEvent.OnClientEvent:Connect(function(duration)
 		self._isGameRunning = true
 
-		-- Lobi m�zigini durdur, oyun m�zigini baslat
+		-- Lobi müziğini durdur, oyun müziğini başlat
 		self:_stopLobbyMusic()
 		self:_playRandomAmbient()
 
@@ -268,7 +268,7 @@ function AmbientSoundController:OnStart()
 		end)
 	end)
 
-	-- 2. OYUN BITTIGINDE
+	-- 2. OYUN BİTTİĞİNDE
 	GameEndedEvent.OnClientEvent:Connect(function()
 		self._isGameRunning = false
 		self._targetKiller = nil
@@ -283,11 +283,11 @@ function AmbientSoundController:OnStart()
 			self._heartbeatConnection = nil
 		end
 
-		-- Lobi m�zigini tekrar baslat
+		-- Lobi müziğini tekrar başlat
 		self:_playLobbyMusic()
 	end)
 
-	-- 3. STATE UPDATE DINLEYICI
+	-- 3. STATE UPDATE DİNLEYİCİ
 	local StateUpdateEvent = Net:RemoteEvent("StateUpdate")
 	StateUpdateEvent.OnClientEvent:Connect(function(stateName, value)
 		if stateName == "PlayerRoles" then
@@ -299,7 +299,7 @@ function AmbientSoundController:OnStart()
 		end
 	end)
 
-	-- 4. OYUNA ILK GIRIS
+	-- 4. OYUNA İLK GİRİŞ
 	if not self._isGameRunning then
 		self:_playLobbyMusic()
 	end
