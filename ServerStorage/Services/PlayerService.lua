@@ -1,11 +1,3 @@
---[[
-	PlayerService.lua
-	
-	GÜNCELLEME: 
-	- Hitbox Sistemi Eklendi: Karakterlerin etrafına 4x6x4 boyutunda görünmez bir kutu oluşturulur.
-	  Bu sayede saldırılar (Spherecast/Raycast) karakteri çok daha rahat algılar.
-]]
-
 -- Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
@@ -13,146 +5,104 @@ local Players = game:GetService("Players")
 
 -- Variables
 local Packages = ReplicatedStorage:WaitForChild("Packages")
-local Shared = ReplicatedStorage:WaitForChild("Shared")
-local Services = ServerStorage:WaitForChild("Services")
+local Modules = ServerStorage:WaitForChild("Modules")
 
--- Assets
-local Characters = Shared:WaitForChild("Characters")
-local OverheadGuiAssets = Shared:WaitForChild("OverheadGuiAssets")
+local PlayerExecutable = Modules:WaitForChild("PlayerExecutable")
 
--- Libraries
-local Charm = require(Packages:WaitForChild("Charm"))
-local FormatKit = require(Packages:WaitForChild("FormatKit"))
 local Promise = require(Packages:WaitForChild("Promise"))
+local Signal = require(Packages:WaitForChild("Signal"))
 local Net = require(Packages:WaitForChild("Net"))
 
--- Game Services
-local DataService = require(Services:WaitForChild("DataService"))
-local MonetizationService = require(Services:WaitForChild("MonetizationService"))
-local RewardService = require(Services:WaitForChild("RewardService"))
+-- Helper
 
--- Constants
-local PlayerIcons = {
-	[414410946] = { -- serdar
-		"rbxasset://textures/ui/PlayerList/developer.png",
-		"rbxassetid://4969357404", 
-	},
-	[4775564686] = { -- mehmet
-		"rbxasset://textures/ui/PlayerList/developer.png",
-		"rbxassetid://105540078", 
-		"rbxassetid://11104447788"
-	},
-	[1327643007] = { -- hamza
-		"rbxassetid://15423490200", 
-		"rbxassetid://10664762623", 
-	}
-}
+local function GetTablePath(root, path)
+	local parts = string.split(path, ".")
+	local current = root
+	for i = 1, #parts - 1 do
+		current = current[parts[i]]
+		if not current then return nil, nil end
+	end
+	return current, parts[#parts]
+end
 
--- Service Definition
+-- Module
 local PlayerService = {
 	Name = script.Name,
 	Client = {},
 
-	PlayerChances = {}, 
-	KillerPriority = {}, 
-
+	Signals = {
+		PlayerAdded = Signal.new(),
+		PlayerRemoving = Signal.new()
+	},
 	Network = {
-		ChanceUpdate = Net:RemoteEvent("ChanceUpdate")
+		DataUpdated = Net:RemoteEvent("DataUpdated"),
+	},
+	LoadedPlayers = {
+		--[[
+		[Player] = {
+			VoteCount = 1,
+			Chance = 0,
+			RewardMultiplier = 1,
+			Role = "", -- Survivor / Killer
+		}
+		]]
 	}
 }
 
---// Client Functions
+function PlayerService.Client:GetPlayerData(Player : Player, TargetPlayer : Player?)
+	-- TargetPlayer varsa onu, yoksa isteği gönderen Player'ı baz al
+	local playerToLookUp = TargetPlayer or Player
 
-function PlayerService.Client:GetChance(player)
-	return PlayerService:GetChance(player)
+	-- Server tarafındaki tabloya erişip veriyi döndür
+	local data = PlayerService.LoadedPlayers[playerToLookUp]
+	return data
 end
 
---// PRIORITY SYSTEM (GARANTİ KATİL)
+--// BUILT IN FUNCTIONS
 
-function PlayerService:SetPriority(player)
-	self.KillerPriority[player] = true
-end
+function PlayerService:GetWeightedPlayer(Key : string)
+	local Values = {}
+	local ValueToPlayer = {}
 
-function PlayerService:HasPriority(player)
-	return self.KillerPriority[player] == true
-end
+	for Player, PlayerData in pairs(self.LoadedPlayers) do
+		local TargetValue = PlayerData[Key]
+		if (typeof(TargetValue) ~= "number") then continue end
 
-function PlayerService:RemovePriority(player)
-	self.KillerPriority[player] = nil
-end
-
---// CHANCE SYSTEM
-
-function PlayerService:GetChance(player)
-	local atom = self.PlayerChances[player]
-	if atom then
-		local baseValue = atom()
-		if player:GetAttribute("VIP") then
-			baseValue = baseValue * 1.5
-		end
-		return math.floor(baseValue) 
+		table.insert(Values, TargetValue)
+		ValueToPlayer[TargetValue] = Player
 	end
-	return 0
-end
 
-function PlayerService:ResetChance(player)
-	local atom = self.PlayerChances[player]
-	if atom then
-		atom(0)
-		self.Network.ChanceUpdate:FireClient(player, 0)
+	-- GÜVENLİK KONTROLÜ: Eğer oyuncu yoksa hata verme, nil döndür.
+	if #Values == 0 then
+		return nil
 	end
+
+	return ValueToPlayer[math.max(unpack(Values))]
 end
 
-function PlayerService:AddChance(player, amount)
-	local atom = self.PlayerChances[player]
-	if atom then
-		local value = amount or 1
-		local newValue = atom() + value
-		atom(newValue)
-		self.Network.ChanceUpdate:FireClient(player, self:GetChance(player))
+function PlayerService:SpawnPlayerTo(Player : Player, Spawnlocation : SpawnLocation | BasePart)
+	-- Eğer hedef spawn noktası hiç yoksa işlemi durdur
+	if not Spawnlocation then
+		warn("SpawnPlayerTo called with nil Spawnlocation for player: " .. Player.Name)
+		return
 	end
-end
+	
+	if Spawnlocation:IsA("SpawnLocation") and Spawnlocation.Enabled then
+		Player.RespawnLocation = Spawnlocation
+		Player:LoadCharacterAsync()
 
---// HITBOX SYSTEM (YENİ)
--- Bu fonksiyon her karaktere 4x6x4'lük dev bir hedef kutusu ekler.
-function PlayerService:CreateHitbox(character)
-	local rootPart = character:WaitForChild("HumanoidRootPart", 5)
-	if not rootPart then return end
+	else
+		Player.RespawnLocation = nil
+		Player:LoadCharacterAsync()
 
-	-- Zaten varsa tekrar ekleme
-	if character:FindFirstChild("Hitbox") then return end
+		-- Karakterin yüklenmesini bekle (LoadCharacter asenkron çalışabilir)
+		local character = Player.Character or Player.CharacterAdded:Wait()
+		local HumanoidRootPart = character:WaitForChild("HumanoidRootPart", 5) -- Timeout eklemek güvenlidir
 
-	local hitbox = Instance.new("Part")
-	hitbox.Name = "Hitbox"
-	hitbox.Size = Vector3.new(4.5, 6, 4.5) -- Karakterden daha geniş bir alan
-	hitbox.CFrame = rootPart.CFrame
-	hitbox.Transparency = 1 -- Görünmez
-	hitbox.CanCollide = false -- İçinden geçilebilir (hareketi engellemez)
-	hitbox.CanQuery = true -- Raycast/Spherecast buna çarpabilir! (ÖNEMLİ)
-	hitbox.CanTouch = true 
-	hitbox.Massless = true -- Ağırlık yapmaz
-	hitbox.Parent = character
-
-	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = rootPart
-	weld.Part1 = hitbox
-	weld.Parent = hitbox
-end
-
---// SPAWNER SYSTEM
-
-function PlayerService:SpawnSurvivors(runningPlayers, spawnLocations)
-	for player, role in pairs(runningPlayers) do
-		if role == "Survivor" then
-			self:_spawnPlayer(player, spawnLocations, "Survivor")
-		end
-	end
-end
-
-function PlayerService:SpawnKillers(runningPlayers, spawnLocations)
-	for player, role in pairs(runningPlayers) do
-		if role == "Killer" then
-			self:_spawnPlayer(player, spawnLocations, "Killer")
+		if HumanoidRootPart then
+			HumanoidRootPart.CFrame = Spawnlocation.CFrame + Vector3.new(0, 3, 0)
+		else
+			warn("HumanoidRootPart not found for player: " .. Player.Name)
 		end
 	end
 end
@@ -161,212 +111,123 @@ function PlayerService:DespawnAll()
 	for _, player in ipairs(Players:GetPlayers()) do
 		player.RespawnLocation = nil
 		player:LoadCharacterAsync()
-		player:SetAttribute("Role", nil)
 	end
 end
 
-function PlayerService:_spawnPlayer(player, spawnLocations, role)
-	if not player then return end
-	player:SetAttribute("Role", role)
+function PlayerService:GetRole(Player : Player)
+	local data = self.LoadedPlayers[Player]
+	if data then
+		return data.Role
+	end
+end
 
-	DataService:GetProfile(player):andThen(function(profile)
-		-- Spawn noktası belirleme
-		local randomSpawn = nil
-		if spawnLocations and #spawnLocations > 0 then
-			randomSpawn = spawnLocations[math.random(1, #spawnLocations)]
-			player.RespawnLocation = randomSpawn
+function PlayerService:GetData(Player : Player)
+	return Promise.new(function(resolve, reject)
+		local data = self.LoadedPlayers[Player]
+		if data then
+			resolve(data)
+		else
+			reject("Player data not found for " .. Player.Name)
 		end
-
-		-- Spawn CFrame hesaplama
-		local spawnCFrame = randomSpawn and (randomSpawn.CFrame * CFrame.new(0, 3, 0)) or CFrame.new(0, 10, 0)
-
-		-- EĞER OYUNCU KATİL İSE
-		if role == "Killer" then
-			local equippedSkin = profile.Data.Equippeds and profile.Data.Equippeds.KillerSkin
-			local characterModel = nil
-			if equippedSkin then 
-				characterModel = Characters:FindFirstChild(equippedSkin) 
-			end
-
-			if not characterModel then 
-				characterModel = Characters:FindFirstChild("Bloxxer") 
-			end
-
-			if characterModel then
-				local newCharacter = characterModel:Clone()
-				newCharacter.Name = player.Name
-				newCharacter:PivotTo(spawnCFrame)
-				newCharacter.Parent = workspace
-				player.Character = newCharacter
-
-				-- [YENİ] Hitbox Ekle
-				self:CreateHitbox(newCharacter)
-
-				Net:RemoteEvent("StartFX"):FireAllClients("KillerSpawn", player)
-
-				local rootPart = newCharacter:FindFirstChild("HumanoidRootPart")
-				if rootPart then
-					rootPart:SetNetworkOwner(player)
-				end
-
-				return 
-			else
-				warn("HATA: Bloxxer/Skin modeli bulunamadı!")
-			end
-		end
-
-		-- EĞER OYUNCU SURVIVOR İSE
-		local connection
-		connection = player.CharacterAdded:Connect(function(character)
-			local rootPart = character:WaitForChild("HumanoidRootPart", 5)
-			if rootPart then
-				character:PivotTo(spawnCFrame)
-				-- [YENİ] Hitbox Ekle
-				self:CreateHitbox(character)
-			end
-			if connection then connection:Disconnect() end
-		end)
-
-		player:LoadCharacterAsync()
-
-	end):catch(function(err)
-		warn("Spawn hatası:", err)
-		player:LoadCharacterAsync()
 	end)
 end
 
---// INITIALIZATION
+function PlayerService:SetData(Player : Player, Path : string, NewValue : any)
+	local playerData = self.LoadedPlayers[Player]
+
+	if not playerData then
+		warn("Cannot set data, player not loaded: " .. Player.Name)
+		return
+	end
+
+	-- Path'i ayrıştırıp ilgili tabloyu ve anahtarı buluyoruz
+	local parentTable, key = GetTablePath(playerData, Path)
+
+	if parentTable and key then
+		-- Veriyi güncelle
+		parentTable[key] = NewValue
+
+		-- Client'ı bilgilendir
+		self.Network.DataUpdated:FireClient(Player, Path, NewValue)
+	else
+		warn("Invalid data path provided: " .. tostring(Path))
+	end
+end
+
+function PlayerService:UpdateData(Player : Player, Callback : ({}) -> ({}))
+	local playerData = self.LoadedPlayers[Player]
+	if not playerData then
+		warn("Cannot update data, player not loaded: " .. Player.Name)
+		return
+	end
+	
+	local success, result = pcall(Callback, playerData)
+	if success then
+		if result ~= nil then
+			self.LoadedPlayers[Player] = result
+			playerData = result
+		end
+		self.Network.DataUpdated:FireClient(Player, nil, playerData)
+	else
+		warn("Error in UpdateData callback for " .. Player.Name .. ": " .. tostring(result))
+	end
+end
 
 function PlayerService:OnStart()
+	local function PlayerAdded(Player : Player)
+		local Data = {
+			VoteCount = 1,
+			Chance = math.random(1, 7),
+			RewardMultiplier = 1,
+			Role = "",
+			-- Can be added by other scripts
+		}
 
-	-- 1. Monetization Kaydı
-	MonetizationService:Register(MonetizationService.Type.Product, 3530798250, function(Player : Player)
-		self:SetPriority(Player)
-		Net:RemoteEvent("SendNotification", "You will be next killer this round", 10)
-		return true
+		self.LoadedPlayers[Player] = Data
+		self.Signals.PlayerAdded:Fire(Player)
+	end
+
+	for _,Player : Player in ipairs(Players:GetPlayers()) do
+		task.spawn(PlayerAdded, Player)
+	end
+
+	Players.PlayerAdded:Connect(PlayerAdded)
+
+	Players.PlayerRemoving:Connect(function(Player : Player)
+		self.LoadedPlayers[Player] = nil
+		self.Signals.PlayerRemoving:Fire(Player)
 	end)
 
-	MonetizationService:Register(MonetizationService.Type.Gamepass, 1705481042, function(Player : Player)
-		DataService:GetProfile(Player):andThen(function(Profile)
-			Profile.Data.KillerSkins["Rich"] = true
-		end)
-		RewardService:AddCurrency(Player, 2000, "VIP")
-		Player:SetAttribute("VIP", true)
-	end)
+	-- Executable (Modüler eklenti sistemi)
+	for _,Module : ModuleScript in ipairs(PlayerExecutable:GetChildren()) do
+		if (not Module:IsA("ModuleScript")) then continue end
 
-	-- 2. DataService Sinyalini Dinle
-	DataService.Signals.DataUpdate:Connect(function(player, path, newValue)
-		if not player then return end
-
-		-- A. Leaderstats Güncellemesi
-		local leaderstats = player:FindFirstChild("leaderstats")
-		if leaderstats then
-			if path == "CurrencyData.Value" then
-				local tokenVal = leaderstats:FindFirstChild("Tokens")
-				if tokenVal then tokenVal.Value = newValue end
-			elseif path == "LevelData.Level" then
-				local levelVal = leaderstats:FindFirstChild("Level")
-				if levelVal then levelVal.Value = newValue end
-			end
+		local Success, Response = pcall(require, Module)
+		if (not Success) then
+			warn("Error requiring module: " .. Module.Name .. " - " .. tostring(Response))
+			continue
 		end
 
-		-- B. OverheadGui Güncellemesi
-		if string.find(path, "LevelData") then
-			local character = player.Character
-			if character then
-				local overhead = character:FindFirstChild("OverheadGui", true)
-				if overhead then
-					local fullData = DataService:GetData(player)
-					if fullData then
-						overhead.Level.Value.Text = `Level {FormatKit.FormatComma(fullData.LevelData.Level)}`
-						local ratio = math.clamp(fullData.LevelData.ValueXP / fullData.LevelData.TargetXP, 0, 1)
-						overhead.Level.FillBar.Size = UDim2.new(ratio, 0, 1, 0)
-					end
-				end
-			end
-		end
-	end)
-
-	-- 3. Oyuncu Katıldığında
-	Players.PlayerAdded:Connect(function(player)
-		player:SetAttribute("VIP", MonetizationService:UserHas(player, 1705481042)) 
-
-		-- A. Leaderstats
-		local Data = DataService:GetData(player)
-		local Leaderstats = Instance.new("Folder")
-		Leaderstats.Name = "leaderstats"
-		Leaderstats.Parent = player
-
-		local Tokens = Instance.new("IntValue")
-		Tokens.Name = "Tokens"
-		Tokens.Value = Data.CurrencyData.Value
-		Tokens.Parent = Leaderstats
-
-		local Level = Instance.new("IntValue")
-		Level.Name = "Level"
-		Level.Value = Data.LevelData.Level
-		Level.Parent = Leaderstats
-
-		-- B. Karakter Yüklendiğinde (Overhead Gui + Hitbox)
-		local function CharacterAdded(Character : Model)
-			-- [YENİ] Lobi veya normal spawn fark etmeksizin Hitbox ekle
-			self:CreateHitbox(Character)
-
-			if (not player:GetAttribute("Role")) then
-				local OverheadGui = OverheadGuiAssets.OverheadGui:Clone()
-				OverheadGui.Parent = Character.PrimaryPart or Character
-				OverheadGui.Display.Username.Text = player.DisplayName
-
-				if (player.UserId <= 0) then
-					local Icon = OverheadGuiAssets.Icon:Clone()
-					Icon.Image = "rbxasset://textures/ui/PlayerList/developer.png"
-					Icon.Parent = OverheadGui.Display
+		if (typeof(Response) == "table") then
+			if (typeof(Response.OnPlayerAdded) == "function") then
+				-- Mevcut oyuncular için çalıştır
+				for _, player in ipairs(Players:GetPlayers()) do
+					task.spawn(function()
+						Response:OnPlayerAdded(player)
+					end)
 				end
 
-				if (player.MembershipType ~= Enum.MembershipType.None) then
-					local PremiumIcon = OverheadGuiAssets.Icon:Clone()
-					PremiumIcon.Image = "rbxasset://textures/ui/PlayerList/PremiumIcon.png"
-					PremiumIcon.Parent = OverheadGui.Display
-				end
-
-				local IconTable = PlayerIcons[player.UserId] or {}
-				for _,IconId in ipairs(IconTable) do
-					local Icon = OverheadGuiAssets.Icon:Clone()
-					Icon.Image = IconId
-					Icon.Parent = OverheadGui.Display
-				end
-
-				OverheadGui.Level.Value.Text = `Level {FormatKit.FormatComma(Data.LevelData.Level)}`
-				local ratio = math.clamp(Data.LevelData.ValueXP / Data.LevelData.TargetXP, 0, 1)
-				OverheadGui.Level.FillBar.Size = UDim2.new(ratio, 0, 1, 0)
+				-- Yeni gelenler için bağla
+				self.Signals.PlayerAdded:Connect(function(Player : Player)
+					Response:OnPlayerAdded(Player)
+				end)
 			end
 
-			for _,Basepart in ipairs(Character:GetDescendants()) do
-				if (Basepart:IsA("BasePart") and Basepart.Name ~= "Hitbox") then -- Hitbox'ı collision grubuna alma
-					Basepart.CollisionGroup = "Player"
-				end
+			if (typeof(Response.OnPlayerRemoving) == "function") then
+				self.Signals.PlayerRemoving:Connect(function(Player : Player)
+					Response:OnPlayerRemoving(Player)
+				end)
 			end
-		end
-
-		if (player.Character) then 
-			CharacterAdded(player.Character) 
-		end
-		player.CharacterAdded:Connect(CharacterAdded)
-
-		self.PlayerChances[player] = Charm.atom(math.random(4,8))
-		self.Network.ChanceUpdate:FireClient(player, self.PlayerChances[player]())
-	end)
-
-	-- 4. Oyuncu Ayrıldığında
-	Players.PlayerRemoving:Connect(function(player)
-		self.PlayerChances[player] = nil
-		self.KillerPriority[player] = nil 
-	end)
-
-	-- 5. Mevcut Oyuncular İçin Şans Başlatma
-	for _, player in ipairs(Players:GetPlayers()) do
-		if not self.PlayerChances[player] then
-			self.PlayerChances[player] = Charm.atom(0)
 		end
 	end
 end
