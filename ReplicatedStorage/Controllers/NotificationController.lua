@@ -10,7 +10,7 @@ local Signal = require(Packages:WaitForChild("Signal"))
 local Net = require(Packages:WaitForChild("Net"))
 
 local Interface = Common:WaitForChild("Interface")
-local NotificationAssets = Interface:WaitForChild("NotificationAssets") -- Dogru klasör yolu
+local NotificationAssets = Interface:WaitForChild("NotificationAssets") -- DoÄŸru klasÃ¶r yolu
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer.PlayerGui
@@ -29,7 +29,7 @@ function NotificationController:CreateNotification(Text : string, Lifetime : num
 
 	local NewNotification = NotificationAssets.Notification:Clone()
 	NewNotification.Text = Text
-	NewNotification.Visible = true -- Görünür oldugundan emin olalim
+	NewNotification.Visible = true -- GÃ¶rÃ¼nÃ¼r olduÄŸundan emin olalÄ±m
 
 	task.delay(Lifetime or 5, function()
 		if NewNotification and NewNotification.Parent then
@@ -41,7 +41,7 @@ function NotificationController:CreateNotification(Text : string, Lifetime : num
 end
 
 function NotificationController:OnStart()
-	-- UI'in yüklendiginden emin ol
+	-- UI'Ä±n yÃ¼klendiÄŸinden emin ol
 	local NotificationHUD = PlayerGui:WaitForChild("NotificationHUD")
 
 	local function AddNotification(Text : string, Lifetime : number)
@@ -52,7 +52,7 @@ function NotificationController:OnStart()
 		Notification.Parent = NotificationHUD
 	end
 
-	-- Hem Client içi sinyali hem de Sunucu sinyalini dinle
+	-- Hem Client iÃ§i sinyali hem de Sunucu sinyalini dinle
 	self.Signals.SendNotification:Connect(AddNotification)
 
 	-- Sunucudan gelen bildirimi dinle (Attack.lua buraya yolluyor)
