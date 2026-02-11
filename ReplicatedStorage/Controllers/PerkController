@@ -57,22 +57,25 @@ function PerkController:OnStart()
 	FetchTableAndSave(SurvivorSkills:GetChildren(), self.CachedPerks.SurvivorPerks)
 	
 	-- Perk Tracker
+	
 	local function PerkAdded()
 		
 	end
 	
-	for _,PerkTool in ipairs(CollectionService:GetTagged(TagKey)) do
+	local function PerkRemoved()
 		
 	end
-	CollectionService:GetInstanceAddedSignal(TagKey):Connect()
-	CollectionService:GetInstanceRemovedSignal(TagKey):Connect(function()
-		
-	end)
+	
+	for _,PerkTool in ipairs(CollectionService:GetTagged(TagKey)) do
+		PerkAdded()
+	end
+	CollectionService:GetInstanceAddedSignal(TagKey):Connect(PerkAdded)
+	CollectionService:GetInstanceRemovedSignal(TagKey):Connect(PerkRemoved)
 	self.Network.PerkAssigned.OnClientEvent:Connect(function(Perk : {Name : string, Id : string}?)
 		if (Perk == nil) then
-			-- remove
+			PerkRemoved()
 		else
-			-- add
+			PerkAdded()
 		end
 	end)
 end
